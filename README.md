@@ -136,8 +136,4 @@ Terminal Controller implements several security measures:
 
 ## License
 
-[Specify your license here]
-
-## Contributing
-
-[Add your contribution guidelines here]
+MIT
