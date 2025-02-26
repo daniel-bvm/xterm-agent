@@ -31,7 +31,7 @@ Terminal Controller implements the Model Context Protocol (MCP) to provide a sec
 1. Clone this repository:
    ```bash
    git clone https://github.com/GongRzhe/terminal-controller-mcp.git
-   cd terminal-controller
+   cd terminal-controller-mcp
    ```
 
 2. Create a virtual environment:
