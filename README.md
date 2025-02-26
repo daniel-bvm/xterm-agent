@@ -26,7 +26,30 @@ Terminal Controller implements the Model Context Protocol (MCP) to provide a sec
 - Python 3.10+
 - MCP-compatible client (such as Claude Desktop)
 
-### Setup
+### Automated Setup (Recommended)
+
+The easiest way to set up Terminal Controller is using the provided setup script:
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/GongRzhe/terminal-controller-mcp.git
+   cd terminal-controller-mcp
+   ```
+
+2. Run the setup script:
+   ```bash
+   python setup_mcp.py
+   ```
+
+This script will:
+- Create a Python virtual environment (`.venv`) if it doesn't exist
+- Install all required dependencies from `requirements.txt`
+- Generate the MCP configuration file with correct paths
+- Display configuration instructions for various MCP clients
+
+### Manual Setup (Alternative)
+
+If you prefer to set up manually:
 
 1. Clone this repository:
    ```bash
@@ -42,7 +65,7 @@ Terminal Controller implements the Model Context Protocol (MCP) to provide a sec
 
 3. Install dependencies:
    ```bash
-   pip install mcp
+   pip install -r requirements.txt
    ```
 
 4. Configure your MCP client to use the server. For Claude Desktop, add this to your `claude_desktop_config.json`:
@@ -57,6 +80,22 @@ Terminal Controller implements the Model Context Protocol (MCP) to provide a sec
      }
    }
    ```
+
+## Client Configuration
+
+### Claude Desktop
+
+The configuration path varies by operating system:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+### Cursor
+
+For Cursor, use the path displayed after running the setup script.
+
+### Other MCP Clients
+
+For other clients, refer to their documentation on how to configure external MCP servers.
 
 ## Usage
 
@@ -133,6 +172,15 @@ Terminal Controller implements several security measures:
 - Only commands that complete within the timeout period will return results
 - By default, the server has access to the same file system permissions as the user running it
 - Some interactive commands may not work as expected due to the non-interactive nature of the terminal interface
+
+## Troubleshooting
+
+If you encounter issues:
+
+1. Check that your Python version is 3.10 or higher
+2. Verify that the paths in your configuration file are correct and absolute
+3. Make sure the virtual environment is properly activated when installing dependencies
+4. Review your MCP client's logs for connection errors
 
 ## License
 
