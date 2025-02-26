@@ -2,6 +2,8 @@
 
 A Model Context Protocol (MCP) server that enables secure terminal command execution, directory navigation, and file system operations through a standardized interface.
 
+![](https://badge.mcpx.dev?type=server 'MCP Server')
+
 ## Features
 
 - **Command Execution**: Run terminal commands with timeout controls and comprehensive output capture
@@ -71,7 +73,7 @@ If you prefer to set up manually:
 4. Configure your MCP client to use the server. For Claude Desktop, add this to your `claude_desktop_config.json`:
    ```json
    "terminal-controller": {
-     "command": "/path/to/terminal-controller/.venv/bin/python",
+     "command": "/path/to/terminal-controller/.venv/bin/python", # "/path/to/terminal-controller/.venv/Scripts/python"
      "args": [
        "/path/to/terminal-controller/terminal_controller.py"
      ],
