@@ -111,7 +111,7 @@ async def execute_command(command: str, timeout: int = 30) -> str:
         Output of the command execution
     """
     # Check for dangerous commands (can add more security checks)
-    dangerous_commands = ["rm -rf /", "format", "mkfs"]
+    dangerous_commands = ["rm -rf /",  "mkfs"]
     if any(dc in command.lower() for dc in dangerous_commands):
         return "For security reasons, this command is not allowed."
     
