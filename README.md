@@ -62,7 +62,7 @@ Add this to your Claude Desktop configuration file:
 ```json
 "terminal-controller": {
   "command": "uvx",
-  "args": ["terminal-controller"]
+  "args": ["terminal_controller"]
 }
 ```
 
@@ -175,7 +175,7 @@ If you encounter issues:
    ```
 4. For UVX-related issues, try:
    ```bash
-   uvx terminal-controller
+   uvx terminal_controller
    ```
 5. Review your MCP client's logs for connection errors
 
