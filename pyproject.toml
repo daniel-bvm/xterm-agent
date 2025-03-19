@@ -1,9 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "terminal-controller"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.1.3"
+description = "A Model Context Protocol (MCP) server for secure terminal command execution and file system operations"
 readme = "README.md"
 requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [
+    {name = "GongRzhe", email = "your.email@example.com"}  # Add your email
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities"
+]
 dependencies = [
     "mcp[cli]>=1.3.0",
+    "httpx>=0.25.0",
 ]
+keywords = ["terminal", "mcp", "claude", "command-line"]
+
+[project.urls]
+"Homepage" = "https://github.com/GongRzhe/terminal-controller-mcp"
+"Bug Tracker" = "https://github.com/GongRzhe/terminal-controller-mcp/issues"
+
+[project.scripts]
+terminal_controller = "terminal_controller:main"  # Change hyphen to underscore

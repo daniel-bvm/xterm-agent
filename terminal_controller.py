@@ -2,6 +2,7 @@ import asyncio
 import os
 import subprocess
 import platform
+import sys
 from typing import List, Dict, Optional
 from datetime import datetime
 from mcp.server.fastmcp import FastMCP
@@ -111,7 +112,7 @@ async def execute_command(command: str, timeout: int = 30) -> str:
         Output of the command execution
     """
     # Check for dangerous commands (can add more security checks)
-    dangerous_commands = ["rm -rf /",  "mkfs"]
+    dangerous_commands = ["rm -rf /", "mkfs"]
     if any(dc in command.lower() for dc in dangerous_commands):
         return "For security reasons, this command is not allowed."
     
@@ -250,6 +251,25 @@ async def list_directory(path: Optional[str] = None) -> str:
     except Exception as e:
         return f"Error listing directory contents: {str(e)}"
 
-if __name__ == "__main__":
-    # Initialize and run server
+def main():
+    """
+    Entry point function that runs the MCP server.
+    """
+    print("Starting Terminal Controller MCP Server...", file=sys.stderr)
     mcp.run(transport='stdio')
+
+# Make the module callable
+def __call__():
+    """
+    Make the module callable for uvx.
+    This function is called when the module is executed directly.
+    """
+    print("Terminal Controller MCP Server starting via __call__...", file=sys.stderr)
+    mcp.run(transport='stdio')
+
+# Add this for compatibility with uvx
+sys.modules[__name__].__call__ = __call__
+
+# Run the server when the script is executed directly
+if __name__ == "__main__":
+    main()

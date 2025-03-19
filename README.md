@@ -12,25 +12,31 @@ A Model Context Protocol (MCP) server that enables secure terminal command execu
 - **Command History**: Track and display recent command executions
 - **Cross-Platform Support**: Works on both Windows and UNIX-based systems
 
-## How It Works
-
-Terminal Controller implements the Model Context Protocol (MCP) to provide a secure interface between LLMs and your terminal. It exposes several tools that allow models to:
-
-1. Execute terminal commands with proper error handling and timeout controls
-2. Navigate through directories while maintaining proper access controls
-3. List contents of directories with clear visual formatting
-4. Track command history for reference and auditing
-
 ## Installation
 
 ### Prerequisites
 
-- Python 3.10+
-- MCP-compatible client (such as Claude Desktop)
+- Python 3.11+
+- An MCP-compatible client (such as Claude Desktop)
+- UV/UVX installed (optional, for UVX method)
 
-### Automated Setup (Recommended)
+### Method 1: PyPI Installation (Recommended)
 
-The easiest way to set up Terminal Controller is using the provided setup script:
+Install the package directly from PyPI:
+
+```bash
+pip install terminal-controller
+```
+
+Or if you prefer to use UV:
+
+```bash
+uv pip install terminal-controller
+```
+
+### Method 2: From Source
+
+If you prefer to install from source:
 
 1. Clone this repository:
    ```bash
@@ -43,49 +49,31 @@ The easiest way to set up Terminal Controller is using the provided setup script
    python setup_mcp.py
    ```
 
-This script will:
-- Create a Python virtual environment (`.venv`) if it doesn't exist
-- Install all required dependencies from `requirements.txt`
-- Generate the MCP configuration file with correct paths
-- Display configuration instructions for various MCP clients
-
-### Manual Setup (Alternative)
-
-If you prefer to set up manually:
-
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/GongRzhe/terminal-controller-mcp.git
-   cd terminal-controller-mcp
-   ```
-
-2. Create a virtual environment:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Configure your MCP client to use the server. For Claude Desktop, add this to your `claude_desktop_config.json`:
-   ```json
-   "terminal-controller": {
-     "command": "/path/to/terminal-controller/.venv/bin/python", # "/path/to/terminal-controller/.venv/Scripts/python"
-     "args": [
-       "/path/to/terminal-controller/terminal_controller.py"
-     ],
-     "env": {
-       "PYTHONPATH": "/path/to/terminal-controller"
-     }
-   }
-   ```
-
 ## Client Configuration
 
 ### Claude Desktop
+
+There are two ways to configure Claude Desktop to use Terminal Controller:
+
+#### Option 1: Using UVX (Recommended)
+
+Add this to your Claude Desktop configuration file:
+
+```json
+"terminal-controller": {
+  "command": "uvx",
+  "args": ["terminal-controller"]
+}
+```
+
+#### Option 2: Using Python Directly
+
+```json
+"terminal-controller": {
+  "command": "python",
+  "args": ["-m", "terminal_controller"]
+}
+```
 
 The configuration path varies by operating system:
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -93,7 +81,7 @@ The configuration path varies by operating system:
 
 ### Cursor
 
-For Cursor, use the path displayed after running the setup script.
+For Cursor, use similar configuration settings as Claude Desktop.
 
 ### Other MCP Clients
 
@@ -179,10 +167,21 @@ Terminal Controller implements several security measures:
 
 If you encounter issues:
 
-1. Check that your Python version is 3.10 or higher
-2. Verify that the paths in your configuration file are correct and absolute
-3. Make sure the virtual environment is properly activated when installing dependencies
-4. Review your MCP client's logs for connection errors
+1. Check that your Python version is 3.11 or higher
+2. Verify that your Claude Desktop configuration is correct
+3. Try running the terminal controller directly to check for errors:
+   ```bash
+   python -m terminal_controller
+   ```
+4. For UVX-related issues, try:
+   ```bash
+   uvx terminal-controller
+   ```
+5. Review your MCP client's logs for connection errors
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
