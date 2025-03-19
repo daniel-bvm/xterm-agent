@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
 authors = [
-    {name = "GongRzhe", email = "your.email@example.com"}  # Add your email
+    {name = "GongRzhe", email = "gongrzhe@gmail.com"}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -33,4 +33,4 @@ keywords = ["terminal", "mcp", "claude", "command-line"]
 "Bug Tracker" = "https://github.com/GongRzhe/terminal-controller-mcp/issues"
 
 [project.scripts]
-terminal-controller = "terminal-controller:main"  # Change hyphen to underscore
+terminal-controller = "terminal_controller:main"  # Change hyphen to underscore

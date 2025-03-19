@@ -112,7 +112,7 @@ def generate_mcp_config_local(python_path):
     base_path = os.path.abspath(os.path.dirname(__file__))
     
     # Path to Terminal Controller server script
-    server_script_path = os.path.join(base_path, 'terminal-controller.py')
+    server_script_path = os.path.join(base_path, 'terminal_controller.py')
     
     # Create MCP configuration dictionary
     config = {
