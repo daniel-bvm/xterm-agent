@@ -148,7 +148,7 @@ def generate_mcp_config_uvx():
         "mcpServers": {
             "terminal-controller": {
                 "command": "uvx",
-                "args": ["terminal-controller"],
+                "args": ["terminal_controller"],
                 "env": {}
             }
         }
