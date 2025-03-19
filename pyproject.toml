@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "terminal-controller"
-version = "0.1.6"
+version = "0.1.7"
 description = "A Model Context Protocol (MCP) server for secure terminal command execution and file system operations"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -33,4 +33,4 @@ keywords = ["terminal", "mcp", "claude", "command-line"]
 "Bug Tracker" = "https://github.com/GongRzhe/terminal-controller-mcp/issues"
 
 [project.scripts]
-terminal-controller = "terminal_controller:main"  # Change hyphen to underscore
+terminal_controller = "terminal_controller:main"  # Change hyphen to underscore
