@@ -11,6 +11,7 @@ A Model Context Protocol (MCP) server that enables secure terminal command execu
 - **Security Measures**: Built-in safeguards against dangerous commands and operations
 - **Command History**: Track and display recent command executions
 - **Cross-Platform Support**: Works on both Windows and UNIX-based systems
+- **File Operations**: Read, write, update, insert, and delete file content with row-level precision
 
 ## Installation
 
@@ -95,6 +96,10 @@ Once configured, you can use natural language to interact with your terminal thr
 - "Navigate to my Documents folder"
 - "Show me the contents of my Downloads directory"
 - "Show me my recent command history"
+- "Read the content of config.json"
+- "Update line 5 in my script.py file with 'print(\"Hello World\")'"
+- "Delete lines 10-15 from the log file"
+- "Insert a new line at the beginning of my text file"
 
 ## API Reference
 
@@ -147,6 +152,68 @@ List files and subdirectories in the specified directory.
 
 **Returns:**
 - List of directory contents, formatted with icons for directories and files
+
+### `write_file`
+
+Write content to a file with overwrite or append options.
+
+**Parameters:**
+- `path`: Path to the file
+- `content`: Content to write
+- `mode`: Write mode ('overwrite' or 'append', default: 'overwrite')
+
+**Returns:**
+- Operation result information including verification of successful write
+
+### `read_file`
+
+Read content from a file with optional row selection.
+
+**Parameters:**
+- `path`: Path to the file
+- `start_row`: Starting row to read from (0-based, optional)
+- `end_row`: Ending row to read to (0-based, inclusive, optional)
+
+**Returns:**
+- File content or selected lines
+
+### `insert_file_content`
+
+Insert content at specific row(s) in a file.
+
+**Parameters:**
+- `path`: Path to the file
+- `content`: Content to insert
+- `row`: Row number to insert at (0-based, optional)
+- `rows`: List of row numbers to insert at (0-based, optional)
+
+**Returns:**
+- Operation result information
+
+### `delete_file_content`
+
+Delete content at specific row(s) from a file.
+
+**Parameters:**
+- `path`: Path to the file
+- `row`: Row number to delete (0-based, optional)
+- `rows`: List of row numbers to delete (0-based, optional)
+
+**Returns:**
+- Operation result information
+
+### `update_file_content`
+
+Update content at specific row(s) in a file.
+
+**Parameters:**
+- `path`: Path to the file
+- `content`: New content to place at the specified row(s)
+- `row`: Row number to update (0-based, optional)
+- `rows`: List of row numbers to update (0-based, optional)
+
+**Returns:**
+- Operation result information
 
 ## Security Considerations
 

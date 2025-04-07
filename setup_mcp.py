@@ -163,20 +163,25 @@ def generate_mcp_config_uvx():
 
 def generate_mcp_config_module():
     """
-    Generate MCP configuration for PyPI-installed terminal-controller using Python module
+    Generate MCP configuration for PyPI-installed terminal-controller using direct script path
     
     Returns: Path to the generated config file
     """
     # Get absolute path of the directory containing the current script
     base_path = os.path.abspath(os.path.dirname(__file__))
     
+    # Path to the actual script
+    script_path = os.path.join(base_path, 'terminal_controller.py')
+    
     # Create MCP configuration dictionary
     config = {
         "mcpServers": {
             "terminal-controller": {
                 "command": sys.executable,
-                "args": ["-m", "terminal-controller"],
-                "env": {}
+                "args": [script_path],
+                "env": {
+                    "PYTHONPATH": base_path
+                }
             }
         }
     }
