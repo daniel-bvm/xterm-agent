@@ -3,6 +3,7 @@
 A Model Context Protocol (MCP) server that enables secure terminal command execution, directory navigation, and file system operations through a standardized interface.
 
 ![](https://badge.mcpx.dev?type=server 'MCP Server')
+[![smithery badge](https://smithery.ai/badge/@GongRzhe/terminal-controller-mcp)](https://smithery.ai/server/@GongRzhe/terminal-controller-mcp)
 
 ## Features
 
@@ -14,6 +15,14 @@ A Model Context Protocol (MCP) server that enables secure terminal command execu
 - **File Operations**: Read, write, update, insert, and delete file content with row-level precision
 
 ## Installation
+
+### Installing via Smithery
+
+To install Terminal Controller for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@GongRzhe/terminal-controller-mcp):
+
+```bash
+npx -y @smithery/cli install @GongRzhe/terminal-controller-mcp --client claude
+```
 
 ### Prerequisites
 
