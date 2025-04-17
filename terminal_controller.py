@@ -3,9 +3,10 @@ import os
 import subprocess
 import platform
 import sys
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from datetime import datetime
 from mcp.server.fastmcp import FastMCP
+import json
 
 # Initialize MCP server
 mcp = FastMCP("terminal-controller")
@@ -36,7 +37,8 @@ async def run_command(cmd: str, timeout: int = 30) -> Dict:
                 cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                shell=True
+                shell=True,
+                env=os.environ
             )
         else:
             process = await asyncio.create_subprocess_shell(
@@ -44,7 +46,8 @@ async def run_command(cmd: str, timeout: int = 30) -> Dict:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 shell=True,
-                executable="/bin/bash"
+                executable="/bin/bash",
+                env=os.environ
             )
         
         try:
@@ -787,6 +790,128 @@ async def update_file_content(path: str, content: str, row: int = None, rows: li
         return f"Error: No permission to modify file '{path}'."
     except Exception as e:
         return f"Error updating content: {str(e)}"
+
+def beautify_json(json_data: Union[Dict, List, str]) -> dict:
+    if isinstance(json_data, dict):
+        return {
+            k: beautify_json(v) 
+            for k, v in json_data.items()
+        }
+    elif isinstance(json_data, list):
+        return [beautify_json(item) for item in json_data]
+    elif isinstance(json_data, str):
+        try:
+            e = json.loads(json_data)
+            return beautify_json(e)
+        except Exception as e:
+            return json_data
+    else:
+        return json_data
+    
+@mcp.tool()
+async def codex(prompt: str) -> str:
+    """
+Why Codex?
+Codex CLI is built for developers who already live in the terminal and want ChatGPT-level reasoning plus the power to actually run code, manipulate files, and iterate - all under version control. In short, it's chat-driven development that understands and executes your repo.
+
+- Zero setup — bring your OpenAI API key and it just works!
+- Full auto-approval, while safe + secure by running network-disabled and directory-sandboxed
+- Multimodal — pass in screenshots or diagrams to implement features ✨
+- And it's fully open-source so you can see and contribute to how it develops!
+
+Args:
+    prompt: Prompt to run codex with
+
+Returns:
+    Dictionary containing command execution results
+"""
+    
+    command = [
+        "codex",
+        "--auto-edit",
+        "--full-auto",
+        "--no-project-doc",
+        "--json", "-q",
+        prompt
+    ]
+    
+    command_str = ' '.join([
+        f'{e!r}' for e in command
+    ])
+    
+    start_time = datetime.now()
+    
+    process = await asyncio.create_subprocess_shell(
+        command_str,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        shell=True,
+        executable="/bin/bash",
+        env=os.environ
+    )
+
+    async def read_stream(stream: asyncio.StreamReader) -> list[dict[str, str]]:
+        buffer = ''
+        collected_json_data: list[dict[str, str]] = []
+
+        while True:
+            chunk = await stream.read(512)
+            
+            if not chunk:
+                break
+            
+            decoded_chunk = chunk.decode('utf-8', errors='replace')
+            buffer += decoded_chunk
+
+            if '\n' in decoded_chunk:
+                lines = buffer.split('\n')
+                buffer = lines.pop()
+
+                for line in lines:
+                    try:
+                        data = json.loads(line)
+                        collected_json_data.append(data)
+                    except Exception as e:
+                        continue
+
+        return collected_json_data
+
+    json_data = await read_stream(process.stdout)
+    err_json_data = await read_stream(process.stderr)
+
+    ids = set([])
+    filtered_json_data = []
+    
+    for item in json_data:
+        identity = "{type}_{id}".format(
+            type=item.get('type'),
+            id=item.get("id", item.get("call_id", ''))
+        )
+
+        if item.get('type') == 'reasoning' or identity in ids \
+            or (item.get('type') == 'message' and item.get('role') == 'user'):
+            continue
+        
+        filtered_json_data.append(item)
+
+    return {
+        "stdout": json.dumps(
+            beautify_json(filtered_json_data), 
+            sort_keys=False, 
+            ensure_ascii=False, 
+            default=str
+        ),
+        "stderr": json.dumps(
+            beautify_json(err_json_data), 
+            sort_keys=False, 
+            ensure_ascii=False, 
+            default=str
+        ),
+        "return_code": process.returncode,
+        "duration": str(datetime.now() - start_time),
+        "command": command_str
+    }
+
 
 def main():
     """
