@@ -1,23 +1,115 @@
 import asyncio
 import os
-import subprocess
 import platform
 import sys
 from typing import List, Dict, Optional, Union
 from datetime import datetime
 from mcp.server.fastmcp import FastMCP
 import json
+import shlex
+import subprocess
+import random
 
 # Initialize MCP server
 mcp = FastMCP("terminal-controller")
 
+from dataclasses import dataclass, field
+    
+@dataclass
+class AIResponse:
+    success: bool = field(default=False)
+    output: str = field(default='')
+    return_code: int = field(default=-1)
+    duration: str = field(default='')
+    command: str = field(default='')
+    
+    def to_dict(self) -> Dict:
+        return {
+            "success": self.success,
+            "output": self.output,
+            "return_code": self.return_code,
+            "duration": self.duration,
+            "command": self.command
+        }
+
+@dataclass
+class CommandHistory:
+    timestamp: str = field(default='')
+    command: str = field(default='')
+    
+    def to_dict(self) -> Dict:
+        return {
+            "timestamp": self.timestamp,
+            "command": self.command
+        }
+    
+    def __repr__(self) -> str:
+        return str(self.to_dict())
+    
+    def __str__(self) -> str:
+        return str(self.to_dict())
+
 # List to store command history
-command_history = []
+command_history: List[CommandHistory] = []
 
 # Maximum history size
 MAX_HISTORY_SIZE = 50
+LOG_FILE = os.path.join(os.path.dirname(__file__), "terminal_controller.log")
+DONE_TOKEN = "[__COMMAND_COMPLETED__]"
+DEFAULT_TIMEOUT = 300
+AGENT_SH = "/bin/agent.sh"
+SCREEN_SESSION = "terminal"
 
-async def run_command(cmd: str, timeout: int = 30) -> Dict:
+def wrap_stuff_command(cmd: str, safe=True) -> str:
+    return f'{AGENT_SH} "{cmd}"' if not safe else f'{AGENT_SH} {cmd}'
+
+async def type_command(cmd: str) -> str:
+
+    # subprocess.check_call(
+    #     ["screen", "-S", SCREEN_SESSION, "-X", "stuff", cmd],
+    #     stdout=sys.stderr,
+    #     stderr=sys.stderr,
+    #     env=os.environ,
+    # )
+
+    for i, c in enumerate(cmd):
+        subprocess.check_call(
+            ["screen", "-S", SCREEN_SESSION, "-X", "stuff", c],
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+            env=os.environ,
+        )
+
+        if c == ' ' and i > 0 and cmd[i - 1] != ' ':
+            await asyncio.sleep(random.uniform(0.05, 0.15))
+        # else:
+            # await asyncio.sleep(random.uniform(0.01, 0.03))
+
+async def flush() -> str:
+    subprocess.check_call(["screen", "-S", SCREEN_SESSION, "-X", "stuff", '\n'])
+
+async def capture_output() -> str:
+    output = ''
+
+    with open(LOG_FILE, 'r') as f:
+        f.seek(0, 2)
+
+        while True:
+            line = f.readline()
+
+            if not line:
+                await asyncio.sleep(1)
+                continue
+
+            print('DEBUG', line, file=sys.stderr)
+            output += line.replace(DONE_TOKEN, '')
+
+            if DONE_TOKEN in line:
+                break
+
+    return output
+
+async def run_command(cmd: str, timeout: int = DEFAULT_TIMEOUT, safe=False) -> Dict:
     """
     Execute command and return results
     
@@ -29,81 +121,46 @@ async def run_command(cmd: str, timeout: int = 30) -> Dict:
         Dictionary containing command execution results
     """
     start_time = datetime.now()
-    
+
     try:
-        # Create command appropriate for current OS
-        if platform.system() == "Windows":
-            process = await asyncio.create_subprocess_shell(
-                cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                shell=True,
-                env=os.environ
-            )
-        else:
-            process = await asyncio.create_subprocess_shell(
-                cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                shell=True,
-                executable="/bin/bash",
-                env=os.environ
-            )
-        
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout)
-            stdout = stdout.decode('utf-8', errors='replace')
-            stderr = stderr.decode('utf-8', errors='replace')
-            return_code = process.returncode
-        except asyncio.TimeoutError:
-            try:
-                process.kill()
-            except:
-                pass
-            return {
-                "success": False,
-                "stdout": "",
-                "stderr": f"Command timed out after {timeout} seconds",
-                "return_code": -1,
-                "duration": str(datetime.now() - start_time),
-                "command": cmd
-            }
-    
+        await type_command(wrap_stuff_command(cmd, safe=safe))
+        await flush()
+        output = await capture_output()
         duration = datetime.now() - start_time
-        result = {
-            "success": return_code == 0,
-            "stdout": stdout,
-            "stderr": stderr,
-            "return_code": return_code,
-            "duration": str(duration),
-            "command": cmd
-        }
+
+        result = AIResponse(
+            success=True,
+            output=output,
+            duration=str(duration),
+            command=cmd
+        ).to_dict()
         
         # Add to history
-        command_history.append({
-            "timestamp": datetime.now().isoformat(),
-            "command": cmd,
-            "success": return_code == 0
-        })
-        
+        command_history.append(
+            CommandHistory(
+                timestamp=datetime.now().isoformat(),
+                command=cmd
+            ).to_dict()
+        )
+
         # If history is too long, remove oldest record
         if len(command_history) > MAX_HISTORY_SIZE:
             command_history.pop(0)
-            
+
         return result
     
     except Exception as e:
-        return {
-            "success": False,
-            "stdout": "",
-            "stderr": f"Error executing command: {str(e)}",
-            "return_code": -1,
-            "duration": str(datetime.now() - start_time),
-            "command": cmd
-        }
+        return AIResponse(
+            success=False,
+            output=str(e),
+            return_code=-1,
+            duration=str(datetime.now() - start_time),
+            command=cmd
+        ).to_dict()
+
 
 @mcp.tool()
-async def execute_command(command: str, timeout: int = 30) -> str:
+async def execute_command(command: str, timeout: int = DEFAULT_TIMEOUT) -> str:
     """
     Execute terminal command and return results
     
@@ -114,36 +171,16 @@ async def execute_command(command: str, timeout: int = 30) -> str:
     Returns:
         Output of the command execution
     """
-    # Check for dangerous commands (can add more security checks)
-    dangerous_commands = ["rm -rf /", "mkfs"]
-    if any(dc in command.lower() for dc in dangerous_commands):
-        return "For security reasons, this command is not allowed."
-    
-    result = await run_command(command, timeout)
-    
-    if result["success"]:
-        output = f"Command executed successfully (duration: {result['duration']})\n\n"
-        
-        if result["stdout"]:
-            output += f"Output:\n{result['stdout']}\n"
-        else:
-            output += "Command had no output.\n"
-            
-        if result["stderr"]:
-            output += f"\nWarnings/Info:\n{result['stderr']}"
-            
-        return output
-    else:
-        output = f"Command execution failed (duration: {result['duration']})\n"
-        
-        if result["stdout"]:
-            output += f"\nOutput:\n{result['stdout']}\n"
-            
-        if result["stderr"]:
-            output += f"\nError:\n{result['stderr']}"
-            
-        output += f"\nReturn code: {result['return_code']}"
-        return output
+
+    result = await run_command(command, timeout, safe=False)
+
+    status = 'successfully' if result["success"] else 'failed'
+    output = f"Command {status} executed\n\n"
+
+    if result["output"]:
+        output += f"Output:\n{result['output']}"
+
+    return output
 
 @mcp.tool()
 async def get_command_history(count: int = 10) -> str:
@@ -165,8 +202,8 @@ async def get_command_history(count: int = 10) -> str:
     output = f"Recent {count} command history:\n\n"
     
     for i, cmd in enumerate(recent_commands):
-        status = "✓" if cmd["success"] else "✗"
-        output += f"{i+1}. [{status}] {cmd['timestamp']}: {cmd['command']}\n"
+        cmd: CommandHistory
+        output += f"{i+1}. {cmd.timestamp}: {cmd.command}\n"
     
     return output
 
@@ -178,7 +215,9 @@ async def get_current_directory() -> str:
     Returns:
         Path of current working directory
     """
-    return os.getcwd()
+
+    res = await run_command("pwd", safe=True)
+    return res["output"]
 
 @mcp.tool()
 async def change_directory(path: str) -> str:
@@ -191,15 +230,10 @@ async def change_directory(path: str) -> str:
     Returns:
         Operation result information
     """
-    try:
-        os.chdir(path)
-        return f"Switched to directory: {os.getcwd()}"
-    except FileNotFoundError:
-        return f"Error: Directory '{path}' does not exist"
-    except PermissionError:
-        return f"Error: No permission to access directory '{path}'"
-    except Exception as e:
-        return f"Error changing directory: {str(e)}"
+
+    path = path.strip('" \t\n\r')
+    res = await run_command(f"cd {path!r}", safe=True)
+    return res["output"]
 
 @mcp.tool()
 async def list_directory(path: Optional[str] = None) -> str:
@@ -212,49 +246,19 @@ async def list_directory(path: Optional[str] = None) -> str:
     Returns:
         List of directory contents
     """
-    if path is None:
-        path = os.getcwd()
-    
-    try:
-        items = os.listdir(path)
-        
-        dirs = []
-        files = []
-        
-        for item in items:
-            full_path = os.path.join(path, item)
-            if os.path.isdir(full_path):
-                dirs.append(f"📁 {item}/")
-            else:
-                files.append(f"📄 {item}")
-        
-        # Sort directories and files
-        dirs.sort()
-        files.sort()
-        
-        if not dirs and not files:
-            return f"Directory '{path}' is empty"
-        
-        output = f"Contents of directory '{path}':\n\n"
-        
-        if dirs:
-            output += "Directories:\n"
-            output += "\n".join(dirs) + "\n\n"
-        
-        if files:
-            output += "Files:\n"
-            output += "\n".join(files)
-        
-        return output
-    
-    except FileNotFoundError:
-        return f"Error: Directory '{path}' does not exist"
-    except PermissionError:
-        return f"Error: No permission to access directory '{path}'"
-    except Exception as e:
-        return f"Error listing directory contents: {str(e)}"
 
-@mcp.tool()
+    if path:
+        path = path.strip('" \t\n\r')
+    else:
+        path = '.'
+
+    res = await run_command(f"ls -la {path!r}", safe=True)
+    return res["output"]
+
+def quote_content(content: str) -> str:
+    return content.replace("'", "\\'")
+
+# @mcp.tool()
 async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
     """
     Write content to a file
@@ -267,529 +271,41 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
     Returns:
         Operation result information
     """
-    try:
-        # Handle different content types
-        if not isinstance(content, str):
-            try:
-                import json
-                # Advanced JSON serialization with better handling of complex objects
-                content = json.dumps(content, 
-                                    indent=4, 
-                                    sort_keys=False, 
-                                    ensure_ascii=False, 
-                                    default=lambda obj: str(obj) if hasattr(obj, '__dict__') else repr(obj))
-            except Exception as e:
-                # Try a more aggressive approach if standard serialization fails
-                try:
-                    # Convert object to dictionary first if it has __dict__
-                    if hasattr(content, '__dict__'):
-                        import json
-                        content = json.dumps(content.__dict__, 
-                                           indent=4, 
-                                           sort_keys=False, 
-                                           ensure_ascii=False)
-                    else:
-                        # Last resort: convert to string representation
-                        content = str(content)
-                except Exception as inner_e:
-                    return f"Error: Unable to convert complex object to writable string: {str(e)}, then tried alternative method and got: {str(inner_e)}"
-        
-        # Choose file mode based on the specified writing mode
-        file_mode = "w" if mode.lower() == "overwrite" else "a"
-        
-        # Ensure content ends with a newline if it doesn't already
-        if content and not content.endswith('\n'):
-            content += '\n'
-        
-        # Ensure directory exists
-        directory = os.path.dirname(os.path.abspath(path))
-        if directory and not os.path.exists(directory):
-            os.makedirs(directory, exist_ok=True)
-            
-        with open(path, file_mode, encoding="utf-8") as file:
-            file.write(content)
-        
-        # Verify the write operation was successful
-        if os.path.exists(path):
-            file_size = os.path.getsize(path)
-            return f"Successfully wrote {file_size} bytes to '{path}' in {mode} mode."
-        else:
-            return f"Write operation completed, but unable to verify file exists at '{path}'."
     
-    except FileNotFoundError:
-        return f"Error: The directory in path '{path}' does not exist and could not be created."
-    except PermissionError:
-        return f"Error: No permission to write to file '{path}'."
-    except Exception as e:
-        return f"Error writing to file: {str(e)}"
+    output = ''
+    
+    file_mode = "w" if mode.lower() == "overwrite" else "a"
+    directory = os.path.dirname(os.path.abspath(path))
+    
+    res = {
+        "success": os.path.exists(directory),
+    }
 
-@mcp.tool()
-async def read_file(path: str, start_row: int = None, end_row: int = None, as_json: bool = False) -> str:
-    """
-    Read content from a file with optional row selection
-    
-    Args:
-        path: Path to the file
-        start_row: Starting row to read from (0-based, optional)
-        end_row: Ending row to read to (0-based, inclusive, optional)
-        as_json: If True, attempt to parse file content as JSON (optional)
-    
-    Returns:
-        File content or selected lines, optionally parsed as JSON
-    """
-    try:
-        if not os.path.exists(path):
-            return f"Error: File '{path}' does not exist."
-            
-        if not os.path.isfile(path):
-            return f"Error: '{path}' is not a file."
-        
-        # Check file size before reading to prevent memory issues
-        file_size = os.path.getsize(path)
-        if file_size > 10 * 1024 * 1024:  # 10 MB limit
-            return f"Warning: File is very large ({file_size/1024/1024:.2f} MB). Consider using row selection."
-            
-        with open(path, 'r', encoding='utf-8', errors='replace') as file:
-            lines = file.readlines()
-            
-        # If row selection is specified
-        if start_row is not None:
-            if start_row < 0:
-                return "Error: start_row must be non-negative."
-                
-            # If only start_row is specified, read just that single row
-            if end_row is None:
-                if start_row >= len(lines):
-                    return f"Error: start_row {start_row} is out of range (file has {len(lines)} lines)."
-                content = f"Line {start_row}: {lines[start_row]}"
-            else:
-                # Both start_row and end_row are specified
-                if end_row < start_row:
-                    return "Error: end_row must be greater than or equal to start_row."
-                    
-                if end_row >= len(lines):
-                    end_row = len(lines) - 1
-                    
-                selected_lines = lines[start_row:end_row+1]
-                content = ""
-                for i, line in enumerate(selected_lines):
-                    content += f"Line {start_row + i}: {line}" if not line.endswith('\n') else f"Line {start_row + i}: {line}"
-        else:
-            # If no row selection, return the entire file
-            content = "".join(lines)
-        
-        # If as_json is True, try to parse the content as JSON
-        if as_json:
-            try:
-                import json
-                # If we're showing line numbers, we cannot parse as JSON
-                if start_row is not None:
-                    return "Error: Cannot parse as JSON when displaying line numbers. Use as_json without row selection."
-                
-                # Try to parse the content as JSON
-                parsed_json = json.loads(content)
-                # Return pretty-printed JSON for better readability
-                return json.dumps(parsed_json, indent=4, sort_keys=False, ensure_ascii=False)
-            except json.JSONDecodeError as e:
-                return f"Error: File content is not valid JSON. {str(e)}\n\nRaw content:\n{content}"
-        
-        return content
-            
-    except PermissionError:
-        return f"Error: No permission to read file '{path}'."
-    except Exception as e:
-        return f"Error reading file: {str(e)}"
+    if not os.path.exists(directory):
+        res = await run_command(f"mkdir -p {directory!r}", safe=True)
+        output += res["output"]
 
-@mcp.tool()
-async def insert_file_content(path: str, content: str, row: int = None, rows: list = None) -> str:
-    """
-    Insert content at specific row(s) in a file
-    
-    Args:
-        path: Path to the file
-        content: Content to insert (string or JSON object)
-        row: Row number to insert at (0-based, optional)
-        rows: List of row numbers to insert at (0-based, optional)
-    
-    Returns:
-        Operation result information
-    """
-    try:
-        # Handle different content types
-        if not isinstance(content, str):
-            try:
-                import json
-                content = json.dumps(content, indent=4, sort_keys=False, ensure_ascii=False, default=str)
-            except Exception as e:
-                return f"Error: Unable to convert content to JSON string: {str(e)}"
-            
-        # Ensure content ends with a newline if it doesn't already
-        if content and not content.endswith('\n'):
-            content += '\n'
-            
-        # Create file if it doesn't exist
-        directory = os.path.dirname(os.path.abspath(path))
-        if not os.path.exists(directory):
-            os.makedirs(directory, exist_ok=True)
-            
-        if not os.path.exists(path):
-            with open(path, 'w', encoding='utf-8') as file:
-                pass
-            
-        with open(path, 'r', encoding='utf-8', errors='replace') as file:
-            lines = file.readlines()
-        
-        # Ensure all existing lines end with newlines
-        for i in range(len(lines)):
-            if lines[i] and not lines[i].endswith('\n'):
-                lines[i] += '\n'
-        
-        # Prepare lines for insertion
-        content_lines = content.splitlines(True)  # Keep line endings
-        
-        # Handle inserting at specific rows
-        if rows is not None:
-            if not isinstance(rows, list):
-                return "Error: 'rows' parameter must be a list of integers."
-                
-            # Sort rows in descending order to avoid changing indices during insertion
-            rows = sorted(rows, reverse=True)
-            
-            for r in rows:
-                if not isinstance(r, int) or r < 0:
-                    return "Error: Row numbers must be non-negative integers."
-                    
-                if r > len(lines):
-                    # If row is beyond the file, append necessary empty lines
-                    lines.extend(['\n'] * (r - len(lines)))
-                    lines.extend(content_lines)
-                else:
-                    # Insert content at each specified row
-                    for line in reversed(content_lines):
-                        lines.insert(r, line)
-            
-            # Write back to the file
-            with open(path, 'w', encoding='utf-8') as file:
-                file.writelines(lines)
-                
-            return f"Successfully inserted content at rows {rows} in '{path}'."
-            
-        # Handle inserting at a single row
-        elif row is not None:
-            if not isinstance(row, int) or row < 0:
-                return "Error: Row number must be a non-negative integer."
-                
-            if row > len(lines):
-                # If row is beyond the file, append necessary empty lines
-                lines.extend(['\n'] * (row - len(lines)))
-                lines.extend(content_lines)
-            else:
-                # Insert content at the specified row
-                for line in reversed(content_lines):
-                    lines.insert(row, line)
-            
-            # Write back to the file
-            with open(path, 'w', encoding='utf-8') as file:
-                file.writelines(lines)
-                
-            return f"Successfully inserted content at row {row} in '{path}'."
-        
-        # If neither row nor rows specified, append to the end
-        else:
-            with open(path, 'a', encoding='utf-8') as file:
-                file.write(content)
-            return f"Successfully appended content to '{path}'."
-            
-    except PermissionError:
-        return f"Error: No permission to modify file '{path}'."
-    except Exception as e:
-        return f"Error inserting content: {str(e)}"
+    if content and not content.endswith('\n'):
+        content += '\n'
 
-@mcp.tool()
-async def delete_file_content(path: str, row: int = None, rows: list = None, substring: str = None) -> str:
-    """
-    Delete content at specific row(s) from a file
-    
-    Args:
-        path: Path to the file
-        row: Row number to delete (0-based, optional)
-        rows: List of row numbers to delete (0-based, optional)
-        substring: If provided, only delete this substring within the specified row(s), not the entire row (optional)
-    
-    Returns:
-        Operation result information
-    """
-    try:
-        if not os.path.exists(path):
-            return f"Error: File '{path}' does not exist."
-            
-        if not os.path.isfile(path):
-            return f"Error: '{path}' is not a file."
-            
-        with open(path, 'r', encoding='utf-8', errors='replace') as file:
-            lines = file.readlines()
-        
-        total_lines = len(lines)
-        deleted_rows = []
-        modified_rows = []
-        
-        # Handle substring deletion (doesn't delete entire rows)
-        if substring is not None:
-            # For multiple rows
-            if rows is not None:
-                if not isinstance(rows, list):
-                    return "Error: 'rows' parameter must be a list of integers."
-                
-                for r in rows:
-                    if not isinstance(r, int) or r < 0:
-                        return "Error: Row numbers must be non-negative integers."
-                        
-                    if r < total_lines and substring in lines[r]:
-                        original_line = lines[r]
-                        lines[r] = lines[r].replace(substring, '')
-                        # Ensure line ends with newline if original did
-                        if original_line.endswith('\n') and not lines[r].endswith('\n'):
-                            lines[r] += '\n'
-                        modified_rows.append(r)
-            
-            # For single row
-            elif row is not None:
-                if not isinstance(row, int) or row < 0:
-                    return "Error: Row number must be a non-negative integer."
-                    
-                if row >= total_lines:
-                    return f"Error: Row {row} is out of range (file has {total_lines} lines)."
-                    
-                if substring in lines[row]:
-                    original_line = lines[row]
-                    lines[row] = lines[row].replace(substring, '')
-                    # Ensure line ends with newline if original did
-                    if original_line.endswith('\n') and not lines[row].endswith('\n'):
-                        lines[row] += '\n'
-                    modified_rows.append(row)
-            
-            # For entire file
-            else:
-                for i in range(len(lines)):
-                    if substring in lines[i]:
-                        original_line = lines[i]
-                        lines[i] = lines[i].replace(substring, '')
-                        # Ensure line ends with newline if original did
-                        if original_line.endswith('\n') and not lines[i].endswith('\n'):
-                            lines[i] += '\n'
-                        modified_rows.append(i)
-            
-            # Write back to the file
-            with open(path, 'w', encoding='utf-8') as file:
-                file.writelines(lines)
-                
-            if not modified_rows:
-                return f"No occurrences of '{substring}' found in the specified rows."
-            return f"Successfully removed '{substring}' from {len(modified_rows)} rows ({modified_rows}) in '{path}'."
-        
-        # Handle deleting multiple rows
-        elif rows is not None:
-            if not isinstance(rows, list):
-                return "Error: 'rows' parameter must be a list of integers."
-                
-            # Sort rows in descending order to avoid changing indices during deletion
-            rows = sorted(rows, reverse=True)
-            
-            for r in rows:
-                if not isinstance(r, int) or r < 0:
-                    return "Error: Row numbers must be non-negative integers."
-                    
-                if r < total_lines:
-                    lines.pop(r)
-                    deleted_rows.append(r)
-            
-            # Write back to the file
-            with open(path, 'w', encoding='utf-8') as file:
-                file.writelines(lines)
-                
-            if not deleted_rows:
-                return f"No rows were within range to delete (file has {total_lines} lines)."
-            return f"Successfully deleted {len(deleted_rows)} rows ({deleted_rows}) from '{path}'."
-            
-        # Handle deleting a single row
-        elif row is not None:
-            if not isinstance(row, int) or row < 0:
-                return "Error: Row number must be a non-negative integer."
-                
-            if row >= total_lines:
-                return f"Error: Row {row} is out of range (file has {total_lines} lines)."
-                
-            # Delete the specified row
-            lines.pop(row)
-            
-            # Write back to the file
-            with open(path, 'w', encoding='utf-8') as file:
-                file.writelines(lines)
-                
-            return f"Successfully deleted row {row} from '{path}'."
-        
-        # If neither row nor rows specified, clear the file
-        else:
-            with open(path, 'w', encoding='utf-8') as file:
-                pass
-            return f"Successfully cleared all content from '{path}'."
-            
-    except PermissionError:
-        return f"Error: No permission to modify file '{path}'."
-    except Exception as e:
-        return f"Error deleting content: {str(e)}"
+    quoted_content = quote_content(content)
+    print('DEBUG', quoted_content, file=sys.stderr)
 
-@mcp.tool()
-async def update_file_content(path: str, content: str, row: int = None, rows: list = None, substring: str = None) -> str:
-    """
-    Update content at specific row(s) in a file
-    
-    Args:
-        path: Path to the file
-        content: New content to place at the specified row(s)
-        row: Row number to update (0-based, optional)
-        rows: List of row numbers to update (0-based, optional)
-        substring: If provided, only replace this substring within the specified row(s), not the entire row
-    
-    Returns:
-        Operation result information
-    """
-    try:
-        # Handle different content types
-        if not isinstance(content, str):
-            try:
-                import json
-                content = json.dumps(content, indent=4, sort_keys=False, ensure_ascii=False, default=str)
-            except Exception as e:
-                return f"Error: Unable to convert content to JSON string: {str(e)}"
-        
-        if not os.path.exists(path):
-            return f"Error: File '{path}' does not exist."
-            
-        if not os.path.isfile(path):
-            return f"Error: '{path}' is not a file."
-            
-        with open(path, 'r', encoding='utf-8', errors='replace') as file:
-            lines = file.readlines()
-        
-        total_lines = len(lines)
-        updated_rows = []
-        
-        # Ensure content ends with a newline if replacing a full line and doesn't already have one
-        if substring is None and content and not content.endswith('\n'):
-            content += '\n'
-        
-        # Prepare lines for update
-        content_lines = content.splitlines(True) if substring is None else [content]
-        
-        # Handle updating multiple rows
-        if rows is not None:
-            if not isinstance(rows, list):
-                return "Error: 'rows' parameter must be a list of integers."
-                
-            for r in rows:
-                if not isinstance(r, int) or r < 0:
-                    return "Error: Row numbers must be non-negative integers."
-                    
-                if r < total_lines:
-                    # If substring is provided, only replace that part
-                    if substring is not None:
-                        # Only update if substring exists in the line
-                        if substring in lines[r]:
-                            original_line = lines[r]
-                            lines[r] = lines[r].replace(substring, content)
-                            # Ensure line ends with newline if original did
-                            if original_line.endswith('\n') and not lines[r].endswith('\n'):
-                                lines[r] += '\n'
-                            updated_rows.append(r)
-                    else:
-                        # Otherwise, replace the entire line
-                        # If we have multiple content lines, use them in sequence
-                        if len(content_lines) > 1:
-                            content_index = r % len(content_lines)
-                            lines[r] = content_lines[content_index]
-                        else:
-                            # If we have only one content line, use it for all rows
-                            lines[r] = content_lines[0] if content_lines else "\n"
-                        updated_rows.append(r)
-            
-            # Write back to the file
-            with open(path, 'w', encoding='utf-8') as file:
-                file.writelines(lines)
-                
-            if not updated_rows:
-                if substring is not None:
-                    return f"No occurrences of substring '{substring}' found in the specified rows (file has {total_lines} lines)."
-                else:
-                    return f"No rows were within range to update (file has {total_lines} lines)."
-            
-            if substring is not None:
-                return f"Successfully updated substring in {len(updated_rows)} rows ({updated_rows}) in '{path}'."
-            else:
-                return f"Successfully updated {len(updated_rows)} rows ({updated_rows}) in '{path}'."
-            
-        # Handle updating a single row
-        elif row is not None:
-            if not isinstance(row, int) or row < 0:
-                return "Error: Row number must be a non-negative integer."
-                
-            if row >= total_lines:
-                return f"Error: Row {row} is out of range (file has {total_lines} lines)."
-                
-            # If substring is provided, only replace that part
-            if substring is not None:
-                # Only update if substring exists in the line
-                if substring in lines[row]:
-                    original_line = lines[row]
-                    lines[row] = lines[row].replace(substring, content)
-                    # Ensure line ends with newline if original did
-                    if original_line.endswith('\n') and not lines[row].endswith('\n'):
-                        lines[row] += '\n'
-                else:
-                    return f"Substring '{substring}' not found in row {row}."
-            else:
-                # Otherwise, replace the entire line
-                lines[row] = content_lines[0] if content_lines else "\n"
-            
-            # Write back to the file
-            with open(path, 'w', encoding='utf-8') as file:
-                file.writelines(lines)
-                
-            if substring is not None:
-                return f"Successfully updated substring in row {row} in '{path}'."
-            else:
-                return f"Successfully updated row {row} in '{path}'."
-        
-        # If neither row nor rows specified, update the entire file
-        else:
-            if substring is not None:
-                # Replace substring throughout the file
-                updated_count = 0
-                for i in range(len(lines)):
-                    if substring in lines[i]:
-                        original_line = lines[i]
-                        lines[i] = lines[i].replace(substring, content)
-                        # Ensure line ends with newline if original did
-                        if original_line.endswith('\n') and not lines[i].endswith('\n'):
-                            lines[i] += '\n'
-                        updated_count += 1
-                
-                with open(path, 'w', encoding='utf-8') as file:
-                    file.writelines(lines)
-                
-                if updated_count == 0:
-                    return f"Substring '{substring}' not found in any line of '{path}'."
-                return f"Successfully updated substring in {updated_count} lines in '{path}'."
-            else:
-                # Replace entire file content
-                with open(path, 'w', encoding='utf-8') as file:
-                    file.write(content)
-                return f"Successfully updated all content in '{path}'."
-            
-    except PermissionError:
-        return f"Error: No permission to modify file '{path}'."
-    except Exception as e:
-        return f"Error updating content: {str(e)}"
+    if res["success"]:
+        res = await run_command(
+            f"echo '{quoted_content}' > {path!r}" 
+            if file_mode == "w" else 
+            f"echo '{quoted_content}' >> {path!r}",
+            safe=True
+        )
+
+        output += "\n" + res["output"]
+
+    if res["success"]:
+        res = await run_command(f"du -sh {path!r}", safe=False)
+        output += "\n" + res["output"]
+
+    return output
 
 def beautify_json(json_data: Union[Dict, List, str]) -> dict:
     if isinstance(json_data, dict):
@@ -807,110 +323,6 @@ def beautify_json(json_data: Union[Dict, List, str]) -> dict:
             return json_data
     else:
         return json_data
-    
-@mcp.tool()
-async def codex(prompt: str) -> str:
-    """
-Why Codex?
-Codex CLI is built for developers who already live in the terminal and want ChatGPT-level reasoning plus the power to actually run code, manipulate files, and iterate - all under version control. In short, it's chat-driven development that understands and executes your repo.
-
-- Zero setup — bring your OpenAI API key and it just works!
-- Full auto-approval, while safe + secure by running network-disabled and directory-sandboxed
-- Multimodal — pass in screenshots or diagrams to implement features ✨
-- And it's fully open-source so you can see and contribute to how it develops!
-
-Args:
-    prompt: Prompt to run codex with
-
-Returns:
-    Dictionary containing command execution results
-"""
-    
-    command = [
-        "codex",
-        "--auto-edit",
-        "--full-auto",
-        "--no-project-doc",
-        "--json", "-q",
-        prompt
-    ]
-    
-    command_str = ' '.join([
-        f'{e!r}' for e in command
-    ])
-    
-    start_time = datetime.now()
-    
-    process = await asyncio.create_subprocess_shell(
-        command_str,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        shell=True,
-        executable="/bin/bash",
-        env=os.environ
-    )
-
-    async def read_stream(stream: asyncio.StreamReader) -> list[dict[str, str]]:
-        buffer = ''
-        collected_json_data: list[dict[str, str]] = []
-
-        while True:
-            chunk = await stream.read(512)
-            
-            if not chunk:
-                break
-            
-            decoded_chunk = chunk.decode('utf-8', errors='replace')
-            buffer += decoded_chunk
-
-            if '\n' in decoded_chunk:
-                lines = buffer.split('\n')
-                buffer = lines.pop()
-
-                for line in lines:
-                    try:
-                        data = json.loads(line)
-                        collected_json_data.append(data)
-                    except Exception as e:
-                        continue
-
-        return collected_json_data
-
-    json_data = await read_stream(process.stdout)
-    err_json_data = await read_stream(process.stderr)
-
-    ids = set([])
-    filtered_json_data = []
-    
-    for item in json_data:
-        identity = "{type}_{id}".format(
-            type=item.get('type'),
-            id=item.get("id", item.get("call_id", ''))
-        )
-
-        if item.get('type') == 'reasoning' or identity in ids \
-            or (item.get('type') == 'message' and item.get('role') == 'user'):
-            continue
-        
-        filtered_json_data.append(item)
-
-    return {
-        "stdout": json.dumps(
-            beautify_json(filtered_json_data), 
-            sort_keys=False, 
-            ensure_ascii=False, 
-            default=str
-        ),
-        "stderr": json.dumps(
-            beautify_json(err_json_data), 
-            sort_keys=False, 
-            ensure_ascii=False, 
-            default=str
-        ),
-        "return_code": process.returncode,
-        "duration": str(datetime.now() - start_time),
-        "command": command_str
-    }
 
 
 def main():
@@ -918,20 +330,58 @@ def main():
     Entry point function that runs the MCP server.
     """
     print("Starting Terminal Controller MCP Server...", file=sys.stderr)
-    mcp.run(transport='stdio')
 
-# Make the module callable
-def __call__():
-    """
-    Make the module callable for uvx.
-    This function is called when the module is executed directly.
-    """
-    print("Terminal Controller MCP Server starting via __call__...", file=sys.stderr)
-    mcp.run(transport='stdio')
+    import subprocess
 
-# Add this for compatibility with uvx
-sys.modules[__name__].__call__ = __call__
+    process = None
 
-# Run the server when the script is executed directly
+    try:
+        agent_sh = f'''\
+#!/bin/bash
+bash -c "$1"
+echo {DONE_TOKEN!r} >> {LOG_FILE!r}
+'''
+
+        with open(AGENT_SH, "w") as f:
+            f.write(agent_sh)
+
+        os.chmod(AGENT_SH, 0o755)
+
+        subprocess.check_call(
+            ["screen", "-dmS", SCREEN_SESSION, "-s", "/bin/bash"],
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+            env=os.environ
+        )
+
+        process = subprocess.Popen(
+            ["ttyd", "-p", "7681", "--writable", "screen", "-x", SCREEN_SESSION],
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+            env=os.environ,
+        )
+
+        subprocess.check_call(
+            ["screen", "-S", SCREEN_SESSION, "-X", "logfile", LOG_FILE],
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+            env=os.environ,
+        )
+
+        subprocess.check_call(
+            ["screen", "-S", SCREEN_SESSION, "-X", "log", "on"],
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+            env=os.environ,
+        )
+
+        mcp.run(transport='stdio')
+    except Exception as e:
+        print(f"Error starting ttyd: {e}", file=sys.stderr)
+        return
+    finally:
+        if process:
+            process.terminate()
+
 if __name__ == "__main__":
     main()
