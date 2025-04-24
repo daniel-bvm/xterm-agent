@@ -4,12 +4,14 @@ import platform
 import sys
 from typing import List, Dict, Optional, Union
 from datetime import datetime
+from tokenize import tokenize
 from mcp.server.fastmcp import FastMCP
 import json
 import shlex
 import subprocess
 import random
-
+from typing import AsyncGenerator
+import re
 # Initialize MCP server
 mcp = FastMCP("terminal-controller")
 
@@ -54,25 +56,39 @@ command_history: List[CommandHistory] = []
 
 # Maximum history size
 MAX_HISTORY_SIZE = 50
-LOG_FILE = os.path.join(os.path.dirname(__file__), "terminal_controller.log")
+LOG_FILE = "/tmp/terminal_controller.log"
 DONE_TOKEN = "[__COMMAND_COMPLETED__]"
 DEFAULT_TIMEOUT = 300
 AGENT_SH = "/bin/agent.sh"
 SCREEN_SESSION = "terminal"
 
 def wrap_stuff_command(cmd: str, safe=True) -> str:
-    return f'{AGENT_SH} "{cmd}"' if not safe else f'{AGENT_SH} {cmd}'
+    return cmd
+
+CURRENT_USER = os.environ['HOME'].split('/')[-1]
+CURRENT_HOST = os.environ['HOSTNAME']
+TERMINATOR = f"{CURRENT_USER}@{CURRENT_HOST}"
+
+async def random_batching(cmd: str) -> AsyncGenerator[str, None]:
+    it = 0
+    
+    while it < len(cmd):
+        xx = random.randint(1, 10)
+        yield cmd[it:it+xx]
+        it += xx
+        
+        
+def remove_console_colors(output: str) -> str:
+    return re.sub(r'\x1b\[[0-9;]*m', '', output)
 
 async def type_command(cmd: str) -> str:
 
-    # subprocess.check_call(
-    #     ["screen", "-S", SCREEN_SESSION, "-X", "stuff", cmd],
-    #     stdout=sys.stderr,
-    #     stderr=sys.stderr,
-    #     env=os.environ,
-    # )
-
-    for i, c in enumerate(cmd):
+    tokenized = []
+    
+    async for batch in random_batching(cmd):
+        tokenized.append(batch)
+    
+    for i, c in enumerate(tokenized):
         subprocess.check_call(
             ["screen", "-S", SCREEN_SESSION, "-X", "stuff", c],
             stdout=sys.stderr,
@@ -80,12 +96,13 @@ async def type_command(cmd: str) -> str:
             env=os.environ,
         )
 
-        if c == ' ' and i > 0 and cmd[i - 1] != ' ':
-            await asyncio.sleep(random.uniform(0.05, 0.15))
-        # else:
-            # await asyncio.sleep(random.uniform(0.01, 0.03))
+        await asyncio.sleep(random.uniform(0.05, 0.15))
 
 async def flush() -> str:
+    # clear the log file before flushing
+    with open(LOG_FILE, 'w') as f:
+        f.truncate(0)
+
     subprocess.check_call(["screen", "-S", SCREEN_SESSION, "-X", "stuff", '\n'])
 
 async def capture_output() -> str:
@@ -101,10 +118,10 @@ async def capture_output() -> str:
                 await asyncio.sleep(1)
                 continue
 
-            print('DEBUG', line, file=sys.stderr)
-            output += line.replace(DONE_TOKEN, '')
+            line = remove_console_colors(line)
+            output += line.replace(TERMINATOR, '') + '\n'
 
-            if DONE_TOKEN in line:
+            if TERMINATOR in line:
                 break
 
     return output
@@ -125,6 +142,7 @@ async def run_command(cmd: str, timeout: int = DEFAULT_TIMEOUT, safe=False) -> D
     try:
         await type_command(wrap_stuff_command(cmd, safe=safe))
         await flush()
+
         output = await capture_output()
         duration = datetime.now() - start_time
 
@@ -252,13 +270,14 @@ async def list_directory(path: Optional[str] = None) -> str:
     else:
         path = '.'
 
-    res = await run_command(f"ls -la {path!r}", safe=True)
+    quoted_path = shlex.quote(path)
+    res = await run_command(f"ls -la {quoted_path}", safe=True)
     return res["output"]
 
 def quote_content(content: str) -> str:
     return content.replace("'", "\\'")
 
-# @mcp.tool()
+@mcp.tool()
 async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
     """
     Write content to a file
@@ -282,27 +301,28 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
     }
 
     if not os.path.exists(directory):
-        res = await run_command(f"mkdir -p {directory!r}", safe=True)
+        quoted_dir = shlex.quote(directory)
+        res = await run_command(f"mkdir -p {quoted_dir}", safe=True)
         output += res["output"]
 
     if content and not content.endswith('\n'):
         content += '\n'
 
-    quoted_content = quote_content(content)
-    print('DEBUG', quoted_content, file=sys.stderr)
+    quoted_content = shlex.quote(content).replace('$', r'\$')
+    quoted_path = shlex.quote(path)
 
     if res["success"]:
         res = await run_command(
-            f"echo '{quoted_content}' > {path!r}" 
+            f"echo {quoted_content} > {quoted_path}" 
             if file_mode == "w" else 
-            f"echo '{quoted_content}' >> {path!r}",
+            f"echo {quoted_content} >> {quoted_path}",
             safe=True
         )
 
         output += "\n" + res["output"]
 
     if res["success"]:
-        res = await run_command(f"du -sh {path!r}", safe=False)
+        res = await run_command(f"du -sh {quoted_path}", safe=False)
         output += "\n" + res["output"]
 
     return output
@@ -336,17 +356,6 @@ def main():
     process = None
 
     try:
-        agent_sh = f'''\
-#!/bin/bash
-bash -c "$1"
-echo {DONE_TOKEN!r} >> {LOG_FILE!r}
-'''
-
-        with open(AGENT_SH, "w") as f:
-            f.write(agent_sh)
-
-        os.chmod(AGENT_SH, 0o755)
-
         subprocess.check_call(
             ["screen", "-dmS", SCREEN_SESSION, "-s", "/bin/bash"],
             stdout=sys.stderr,
@@ -370,6 +379,13 @@ echo {DONE_TOKEN!r} >> {LOG_FILE!r}
 
         subprocess.check_call(
             ["screen", "-S", SCREEN_SESSION, "-X", "log", "on"],
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+            env=os.environ,
+        )
+        
+        subprocess.check_call(
+            ["screen", "-S", SCREEN_SESSION, "-X", "flushlog", "1"],
             stdout=sys.stderr,
             stderr=sys.stderr,
             env=os.environ,

@@ -1,8 +1,7 @@
 {
     "command": "python",
     "args": [
-        "-c",
-        "from terminal_controller import mcp; mcp.run()"
+        "terminal_controller.py"
     ],
     "env": {}
 }
