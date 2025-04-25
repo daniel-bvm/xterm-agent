@@ -98,12 +98,15 @@ async def type_command(cmd: str) -> str:
 
         await asyncio.sleep(random.uniform(0.05, 0.15))
 
-async def flush() -> str:
+async def flush_command() -> str:
     # clear the log file before flushing
     with open(LOG_FILE, 'w') as f:
-        f.truncate(0)
+        f.write('')
 
     subprocess.check_call(["screen", "-S", SCREEN_SESSION, "-X", "stuff", '\n'])
+    
+async def flush_log() -> str:
+    subprocess.check_call(["screen", "-S", SCREEN_SESSION, "-X", "colon", "logfile flush 1^M"])
 
 async def capture_output() -> str:
     output = ''
@@ -115,7 +118,8 @@ async def capture_output() -> str:
             line = f.readline()
 
             if not line:
-                await asyncio.sleep(1)
+                await asyncio.sleep(.3)
+                # await flush_log()
                 continue
 
             line = remove_console_colors(line)
@@ -141,7 +145,7 @@ async def run_command(cmd: str, timeout: int = DEFAULT_TIMEOUT, safe=False) -> D
 
     try:
         await type_command(wrap_stuff_command(cmd, safe=safe))
-        await flush()
+        await flush_command()
 
         output = await capture_output()
         duration = datetime.now() - start_time
@@ -178,19 +182,18 @@ async def run_command(cmd: str, timeout: int = DEFAULT_TIMEOUT, safe=False) -> D
 
 
 @mcp.tool()
-async def execute_command(command: str, timeout: int = DEFAULT_TIMEOUT) -> str:
+async def execute_command(command: str) -> str:
     """
-    Execute terminal command and return results
-    
+    Execute command in a real terminal
+
     Args:
         command: Command line command to execute
-        timeout: Command timeout in seconds, default is 30 seconds
     
     Returns:
         Output of the command execution
     """
 
-    result = await run_command(command, timeout, safe=False)
+    result = await run_command(command, safe=False)
 
     status = 'successfully' if result["success"] else 'failed'
     output = f"Command {status} executed\n\n"
@@ -321,9 +324,9 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
 
         output += "\n" + res["output"]
 
-    if res["success"]:
-        res = await run_command(f"du -sh {quoted_path}", safe=False)
-        output += "\n" + res["output"]
+    # if res["success"]:
+    #     res = await run_command(f"du -sh {quoted_path}", safe=False)
+    #     output += "\n" + res["output"]
 
     return output
 
@@ -356,8 +359,14 @@ def main():
     process = None
 
     try:
+        with open(os.path.expanduser('~/.screenrc'), 'a') as f:
+            f.write('termcapinfo xterm* ti@:te@\n')
+
+        with open(os.path.expanduser('~/.bashrc'), 'a') as f:
+            f.write('export TERM=xterm-256color\n')
+
         subprocess.check_call(
-            ["screen", "-dmS", SCREEN_SESSION, "-s", "/bin/bash"],
+            ["screen", "-dmS", SCREEN_SESSION, "-s", "bash"],
             stdout=sys.stderr,
             stderr=sys.stderr,
             env=os.environ
@@ -385,7 +394,14 @@ def main():
         )
         
         subprocess.check_call(
-            ["screen", "-S", SCREEN_SESSION, "-X", "flushlog", "1"],
+            ["screen", "-S", SCREEN_SESSION, "-X", "deflog", "on"],
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+            env=os.environ,
+        )
+        
+        subprocess.check_call(
+            ["screen", "-S", SCREEN_SESSION, "-X", "logfile", "flush", "1"],
             stdout=sys.stderr,
             stderr=sys.stderr,
             env=os.environ,
