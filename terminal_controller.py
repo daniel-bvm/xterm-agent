@@ -1,21 +1,23 @@
 import asyncio
 import os
-import platform
 import sys
-from typing import List, Dict, Optional, Union
+from typing import Dict, Optional, AsyncGenerator
 from datetime import datetime
-from tokenize import tokenize
 from mcp.server.fastmcp import FastMCP
-import json
 import shlex
 import subprocess
 import random
-from typing import AsyncGenerator
 import re
+import json
+import logging
+
 # Initialize MCP server
 mcp = FastMCP("terminal-controller")
 
 from dataclasses import dataclass, field
+
+logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+logger = logging.getLogger(__name__)
     
 @dataclass
 class AIResponse:
@@ -34,32 +36,8 @@ class AIResponse:
             "command": self.command
         }
 
-@dataclass
-class CommandHistory:
-    timestamp: str = field(default='')
-    command: str = field(default='')
-    
-    def to_dict(self) -> Dict:
-        return {
-            "timestamp": self.timestamp,
-            "command": self.command
-        }
-    
-    def __repr__(self) -> str:
-        return str(self.to_dict())
-    
-    def __str__(self) -> str:
-        return str(self.to_dict())
-
-# List to store command history
-command_history: List[CommandHistory] = []
-
-# Maximum history size
-MAX_HISTORY_SIZE = 50
 LOG_FILE = "/tmp/terminal_controller.log"
-DONE_TOKEN = "[__COMMAND_COMPLETED__]"
 DEFAULT_TIMEOUT = 300
-AGENT_SH = "/bin/agent.sh"
 SCREEN_SESSION = "terminal"
 
 def wrap_stuff_command(cmd: str, safe=True) -> str:
@@ -69,25 +47,50 @@ CURRENT_USER = os.environ['HOME'].split('/')[-1]
 CURRENT_HOST = os.environ['HOSTNAME']
 TERMINATOR = f"{CURRENT_USER}@{CURRENT_HOST}"
 
-async def random_batching(cmd: str) -> AsyncGenerator[str, None]:
+from string import punctuation
+
+async def random_batching(cmd: str, max_length: int = 10) -> AsyncGenerator[str, None]:
     it = 0
     
     while it < len(cmd):
-        xx = random.randint(1, 10)
+        xx = random.randint(1, max_length)
+
+        while it + xx < len(cmd) and cmd[it + xx - 1] in punctuation and cmd[it + xx] in punctuation:
+            xx += 1
+
         yield cmd[it:it+xx]
         it += xx
         
-        
-def remove_console_colors(output: str) -> str:
-    return re.sub(r'\x1b\[[0-9;]*m', '', output)
+def remove_console_color(text):
+  """
+  Removes ANSI color codes from a string.
 
-async def type_command(cmd: str) -> str:
+  Args:
+    text: The string to remove color codes from.
 
+  Returns:
+    The string with color codes removed.
+  """
+  return re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', text)
+
+
+
+async def type_command(cmd: str, fast=False) -> str:
+    # subprocess.check_call(
+    #     ["screen", "-S", SCREEN_SESSION, "-X", "stuff", cmd],
+    #     stdout=sys.stderr,
+    #     stderr=sys.stderr,
+    #     env=os.environ,
+    # )
+    # return
+    
     tokenized = []
     
-    async for batch in random_batching(cmd):
+    max_length = 10 if not fast else 30
+
+    async for batch in random_batching(cmd, max_length=max_length):
         tokenized.append(batch)
-    
+
     for i, c in enumerate(tokenized):
         subprocess.check_call(
             ["screen", "-S", SCREEN_SESSION, "-X", "stuff", c],
@@ -96,7 +99,7 @@ async def type_command(cmd: str) -> str:
             env=os.environ,
         )
 
-        await asyncio.sleep(random.uniform(0.05, 0.15))
+        await asyncio.sleep(random.uniform(0.04, 0.15 if not fast else 0.08))
 
 async def flush_command() -> str:
     # clear the log file before flushing
@@ -122,7 +125,7 @@ async def capture_output() -> str:
                 # await flush_log()
                 continue
 
-            line = remove_console_colors(line)
+            line = remove_console_color(line)
             output += line.replace(TERMINATOR, '') + '\n'
 
             if TERMINATOR in line:
@@ -130,7 +133,7 @@ async def capture_output() -> str:
 
     return output
 
-async def run_command(cmd: str, timeout: int = DEFAULT_TIMEOUT, safe=False) -> Dict:
+async def run_command(cmd: str, timeout: int = DEFAULT_TIMEOUT, safe=False, fast=False) -> Dict:
     """
     Execute command and return results
     
@@ -142,9 +145,10 @@ async def run_command(cmd: str, timeout: int = DEFAULT_TIMEOUT, safe=False) -> D
         Dictionary containing command execution results
     """
     start_time = datetime.now()
+    logger.info(f"Running command: {cmd}")
 
     try:
-        await type_command(wrap_stuff_command(cmd, safe=safe))
+        await type_command(wrap_stuff_command(cmd, safe=safe), fast=fast)
         await flush_command()
 
         output = await capture_output()
@@ -156,18 +160,6 @@ async def run_command(cmd: str, timeout: int = DEFAULT_TIMEOUT, safe=False) -> D
             duration=str(duration),
             command=cmd
         ).to_dict()
-        
-        # Add to history
-        command_history.append(
-            CommandHistory(
-                timestamp=datetime.now().isoformat(),
-                command=cmd
-            ).to_dict()
-        )
-
-        # If history is too long, remove oldest record
-        if len(command_history) > MAX_HISTORY_SIZE:
-            command_history.pop(0)
 
         return result
     
@@ -182,16 +174,21 @@ async def run_command(cmd: str, timeout: int = DEFAULT_TIMEOUT, safe=False) -> D
 
 
 @mcp.tool()
-async def execute_command(command: str) -> str:
+async def execute_command(command: str, filter_str: Optional[str] = None) -> str:
     """
     Execute command in a real terminal
 
     Args:
         command: Command line command to execute
+        filter_str: Filter to apply to the command output
     
     Returns:
         Output of the command execution
     """
+
+    if filter_str:
+        quoted_filter_str = shlex.quote(filter_str)
+        command += f" | grep {quoted_filter_str}"
 
     result = await run_command(command, safe=False)
 
@@ -204,29 +201,25 @@ async def execute_command(command: str) -> str:
     return output
 
 @mcp.tool()
-async def get_command_history(count: int = 10) -> str:
+async def get_command_history(count: int = 20, filter_str: Optional[str] = None) -> str:
     """
     Get recent command execution history
     
     Args:
         count: Number of recent commands to return
-    
+        filter_str: Filter to apply to the command output
     Returns:
         Formatted command history record
     """
-    if not command_history:
-        return "No command execution history."
     
-    count = min(count, len(command_history))
-    recent_commands = command_history[-count:]
+    command = f"history {count}"
     
-    output = f"Recent {count} command history:\n\n"
-    
-    for i, cmd in enumerate(recent_commands):
-        cmd: CommandHistory
-        output += f"{i+1}. {cmd.timestamp}: {cmd.command}\n"
-    
-    return output
+    if filter_str:
+        quoted_filter_str = shlex.quote(filter_str)
+        command += f" | grep {quoted_filter_str}"
+
+    res = await run_command(command, safe=True)
+    return res["output"]
 
 @mcp.tool()
 async def get_current_directory() -> str:
@@ -252,8 +245,8 @@ async def change_directory(path: str) -> str:
         Operation result information
     """
 
-    path = path.strip('" \t\n\r')
-    res = await run_command(f"cd {path!r}", safe=True)
+    path = shlex.quote(path)
+    res = await run_command(f"cd {path}", safe=True)
     return res["output"]
 
 @mcp.tool()
@@ -276,9 +269,6 @@ async def list_directory(path: Optional[str] = None) -> str:
     quoted_path = shlex.quote(path)
     res = await run_command(f"ls -la {quoted_path}", safe=True)
     return res["output"]
-
-def quote_content(content: str) -> str:
-    return content.replace("'", "\\'")
 
 @mcp.tool()
 async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
@@ -311,7 +301,7 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
     if content and not content.endswith('\n'):
         content += '\n'
 
-    quoted_content = shlex.quote(content).replace('$', r'\$')
+    quoted_content = shlex.quote(content).replace('$', r'\$').replace('\\"', r'\\"')
     quoted_path = shlex.quote(path)
 
     if res["success"]:
@@ -319,33 +309,77 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
             f"echo {quoted_content} > {quoted_path}" 
             if file_mode == "w" else 
             f"echo {quoted_content} >> {quoted_path}",
-            safe=True
+            safe=True,
+            fast=True
         )
 
         output += "\n" + res["output"]
 
-    # if res["success"]:
-    #     res = await run_command(f"du -sh {quoted_path}", safe=False)
-    #     output += "\n" + res["output"]
-
     return output
 
-def beautify_json(json_data: Union[Dict, List, str]) -> dict:
-    if isinstance(json_data, dict):
-        return {
-            k: beautify_json(v) 
-            for k, v in json_data.items()
-        }
-    elif isinstance(json_data, list):
-        return [beautify_json(item) for item in json_data]
-    elif isinstance(json_data, str):
-        try:
-            e = json.loads(json_data)
-            return beautify_json(e)
-        except Exception as e:
-            return json_data
-    else:
-        return json_data
+@mcp.tool()
+async def internet_search(query: str, topic: str = "general") -> str:
+    """
+    Search the related information on the internet
+
+    Args:
+        query: Query to search for
+        topic: Topic to search for, defaults to "general"
+
+    Returns: Related information
+    """
+
+    body = {
+        "url": "https://api.tavily.com/search",
+        "headers": {
+            "Content-Type": "application/json",
+        },
+        "body": {
+            "query": query,
+            "max_results": 5,
+            "include_image_descriptions": True,
+            "include_images": True,
+            "topic": topic
+        },
+        "method": "POST"
+    }
+
+    body_str = json.dumps(body)
+    
+    data = {
+        'messages': [
+            {
+                'role': 'user',
+                'content': body_str
+            }
+        ]
+    }
+
+    data_str = shlex.quote(json.dumps(data, indent=2)).replace('$', "'$'").replace('\\"', r'\\"')
+    command = f"curl -X POST 'http://84532-proxy/prompt' -H 'Content-Type: application/json' -d {data_str}"
+    res = await run_command(command, safe=True, fast=True)
+    return res["output"]
+
+
+async def fetch(url: str, filter_str: Optional[str] = None) -> str:
+    """
+    Fetch the content from the given URL
+    
+    Args:
+        url: URL to fetch content from
+        filter_str: Filter to apply to the content
+
+    Returns: Content from the URL
+    """
+    
+    command = f"curl -s '{url}'"
+    
+    if filter_str:
+        quoted_filter_str = shlex.quote(filter_str)
+        command += f" | grep {quoted_filter_str}"
+
+    res = await run_command(command, safe=True, fast=True)
+    return res["output"]
 
 
 def main():
@@ -353,8 +387,6 @@ def main():
     Entry point function that runs the MCP server.
     """
     print("Starting Terminal Controller MCP Server...", file=sys.stderr)
-
-    import subprocess
 
     process = None
 
@@ -370,6 +402,13 @@ def main():
             stdout=sys.stderr,
             stderr=sys.stderr,
             env=os.environ
+        )
+
+        subprocess.check_call(
+            ["screen", "-S", SCREEN_SESSION, "-X", "stuff", "history -c && clear\n"],
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+            env=os.environ,
         )
 
         process = subprocess.Popen(
@@ -409,8 +448,7 @@ def main():
 
         mcp.run(transport='stdio')
     except Exception as e:
-        print(f"Error starting ttyd: {e}", file=sys.stderr)
-        return
+        print(f"Exception raised: {e}", file=sys.stderr)
     finally:
         if process:
             process.terminate()
