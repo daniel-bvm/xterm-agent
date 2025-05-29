@@ -76,13 +76,6 @@ def remove_console_color(text):
 
 
 async def type_command(cmd: str, fast=False) -> str:
-    # subprocess.check_call(
-    #     ["screen", "-S", SCREEN_SESSION, "-X", "stuff", cmd],
-    #     stdout=sys.stderr,
-    #     stderr=sys.stderr,
-    #     env=os.environ,
-    # )
-    # return
     
     tokenized = []
     
@@ -356,7 +349,7 @@ async def internet_search(query: str, topic: str = "general") -> str:
     }
 
     data_str = shlex.quote(json.dumps(data, indent=2)).replace('$', "'$'").replace('\\"', r'\\"')
-    command = f"curl -X POST 'http://84532-proxy/prompt' -H 'Content-Type: application/json' -d {data_str}"
+    command = f"curl -X POST \$ETERNALAI_MCP_PROXY_URL -H 'Content-Type: application/json' -d {data_str}"
     res = await run_command(command, safe=True, fast=True)
     return res["output"]
 
