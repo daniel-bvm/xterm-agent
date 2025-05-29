@@ -164,6 +164,7 @@ async def run_command(cmd: str, timeout: int = DEFAULT_TIMEOUT, safe=False, fast
         return result
     
     except Exception as e:
+        logger.error(f"Error running command '{cmd}': {e}")
         return AIResponse(
             success=False,
             output=str(e),
@@ -301,7 +302,11 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
     if content and not content.endswith('\n'):
         content += '\n'
 
-    quoted_content = shlex.quote(content).replace('$', r'\$').replace('\\"', r'\\"')
+    # with open("test_"+path, 'w') as f:
+    #     f.write(content)
+
+    # quoted_content = shlex.quote(content).replace('$', r'\$').replace('\\"', r'\\"').replace('\\n', r'\\n')
+    quoted_content = shlex.quote(content).replace('$', r'\$').replace('\\', r'\\')
     quoted_path = shlex.quote(path)
 
     if res["success"]:
@@ -317,14 +322,14 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
 
     return output
 
+
 @mcp.tool()
-async def internet_search(query: str, topic: str = "general") -> str:
+async def internet_search(query: str) -> str:
     """
-    Search the related information on the internet
+    Search the general related information on the internet
 
     Args:
         query: Query to search for
-        topic: Topic to search for, defaults to "general"
 
     Returns: Related information
     """
@@ -336,10 +341,10 @@ async def internet_search(query: str, topic: str = "general") -> str:
         },
         "body": {
             "query": query,
-            "max_results": 5,
+            "max_results": 10,
             "include_image_descriptions": True,
             "include_images": True,
-            "topic": topic
+            "topic": "general"
         },
         "method": "POST"
     }
@@ -356,7 +361,53 @@ async def internet_search(query: str, topic: str = "general") -> str:
     }
 
     data_str = shlex.quote(json.dumps(data, indent=2)).replace('$', "'$'").replace('\\"', r'\\"')
-    command = f"curl -X POST 'http://84532-proxy/prompt' -H 'Content-Type: application/json' -d {data_str}"
+    proxy_url = os.environ.get("ETERNALAI_MCP_PROXY_URL", "http://84532-proxy/prompt")
+    command = f"curl -X POST '{proxy_url}' -H 'Content-Type: application/json' -d {data_str}"
+    res = await run_command(command, safe=True, fast=True)
+    return res["output"]
+
+
+@mcp.tool()
+async def news_search(query: str) -> str:
+    """
+    Search the related latest news on the internet
+
+    Args:
+        query: Query to search for
+
+    Returns: Related latest news
+    """
+
+    body = {
+        "url": "https://api.tavily.com/search",
+        "headers": {
+            "Content-Type": "application/json",
+        },
+        "body": {
+            "query": query,
+            "max_results": 10,
+            "include_image_descriptions": True,
+            "include_images": True,
+            "days": 7,
+            "topic": "news"
+        },
+        "method": "POST"
+    }
+
+    body_str = json.dumps(body)
+    
+    data = {
+        'messages': [
+            {
+                'role': 'user',
+                'content': body_str
+            }
+        ]
+    }
+
+    data_str = shlex.quote(json.dumps(data, indent=2)).replace('$', "'$'").replace('\\"', r'\\"')
+    proxy_url = os.environ.get("ETERNALAI_MCP_PROXY_URL", "http://84532-proxy/prompt")
+    command = f"curl -X POST '{proxy_url}' -H 'Content-Type: application/json' -d {data_str}"
     res = await run_command(command, safe=True, fast=True)
     return res["output"]
 
