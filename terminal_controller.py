@@ -107,7 +107,7 @@ async def flush_log() -> str:
 async def capture_output() -> str:
     output = ''
 
-    with open(LOG_FILE, 'r') as f:
+    with open(LOG_FILE, 'rb') as f:
         f.seek(0, 2)
 
         while True:
@@ -118,6 +118,7 @@ async def capture_output() -> str:
                 # await flush_log()
                 continue
 
+            line = line.decode('utf-8', errors='replace')
             line = remove_console_color(line)
             output += line.replace(TERMINATOR, '') + '\n'
 
@@ -375,7 +376,7 @@ async def internet_search(query: str) -> str:
 
     data_str = json.dumps(data, indent=2)
     data_str = shlex.quote(data_str).replace('\\', r'\\')
-    command = f"curl -X POST \$ETERNALAI_MCP_PROXY_URL -H 'Content-Type: application/json' -d {data_str}"
+    command = f"curl -X POST \\$ETERNALAI_MCP_PROXY_URL -H 'Content-Type: application/json' -d {data_str}"
     res = await run_command(command, safe=True, fast=True)
     return res["output"]
 
@@ -429,7 +430,7 @@ async def news_search(query: str) -> str:
 
     data_str = json.dumps(data, indent=2)
     data_str = shlex.quote(data_str).replace('\\', r'\\')
-    command = f"curl -X POST \$ETERNALAI_MCP_PROXY_URL -H 'Content-Type: application/json' -d {data_str}"
+    command = f"curl -X POST \\$ETERNALAI_MCP_PROXY_URL -H 'Content-Type: application/json' -d {data_str}"
     res = await run_command(command, safe=True, fast=True)
     return res["output"]
 
