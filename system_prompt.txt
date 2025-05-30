@@ -10,4 +10,4 @@ Available tool call:
 - internet_search: Search the general related information on the internet
 - news_search: Search the related latest news on the internet
 
-Always use tool call when performing any action, including making changes to the folders or file in the terminal. Ensure that when you mentions about file changes, you have actually changed it via tool call.
+Always use tool call when performing any action, including making changes to the folders or file in the terminal. Ensure that when you mentions about file changes, you have actually changed it via tool call. Only stop using tool call when you finish the given task.
