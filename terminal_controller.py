@@ -195,75 +195,192 @@ async def execute_command(command: str, filter_str: Optional[str] = None) -> str
 
     return output
 
+
 @mcp.tool()
-async def get_command_history(count: int = 20, filter_str: Optional[str] = None) -> str:
+async def get_weather(location_code: str) -> str:
     """
-    Get recent command execution history
-    
+    Get weather information for a given location
+
     Args:
-        count: Number of recent commands to return
-        filter_str: Filter to apply to the command output
-    Returns:
-        Formatted command history record
-    """
-    
-    command = f"history {count}"
-    
-    if filter_str:
-        quoted_filter_str = shlex.quote(filter_str)
-        command += f" | grep {quoted_filter_str}"
-
-    res = await run_command(command, safe=True)
-    return res["output"]
-
-@mcp.tool()
-async def get_current_directory() -> str:
-    """
-    Get current working directory
+        location_code: 3-letter airport code of the location to get weather for
     
     Returns:
-        Path of current working directory
+        Weather information for the given location
     """
 
-    res = await run_command("pwd", safe=True)
-    return res["output"]
+    location_code = shlex.quote(location_code)
+
+    command = f"curl wttr.in/{location_code}"
+
+    result = await run_command(command, safe=False)
+    
+    return result["output"]
+
 
 @mcp.tool()
-async def change_directory(path: str) -> str:
+async def get_crypto_market_info() -> str:
     """
-    Change current working directory
+    Get information for the overall crypto market
+
+    Returns:
+        Information for the overall crypto market
+    """
+
+    command = f"curl rate.sx"
+
+    result = await run_command(command, safe=False)
     
+    return result["output"]
+
+
+@mcp.tool()
+async def get_cryptocoin_info(symbol: str) -> str:
+    """
+    Get information for a given crypto coin
+
     Args:
-        path: Directory path to switch to
+        symbol: Symbol of the crypto coin to get information for
     
     Returns:
-        Operation result information
+        Information for the given crypto coin
     """
 
-    path = shlex.quote(path)
-    res = await run_command(f"cd {path}", safe=True)
-    return res["output"]
+    symbol = shlex.quote(symbol.lower())
+
+    command = f"curl rate.sx/{symbol}"
+
+    result = await run_command(command, safe=False)
+    
+    return result["output"]
+
 
 @mcp.tool()
-async def list_directory(path: Optional[str] = None) -> str:
+async def get_joke(query: Optional[str] = None, limit: Optional[int] = 1) -> str:
     """
-    List files and subdirectories in the specified directory
-    
+    Get a random joke
+
     Args:
-        path: Directory path to list contents, default is current directory
-    
+        query: Query to search for
+        limit: Number of jokes to return
+
     Returns:
-        List of directory contents
+        A random joke
     """
 
-    if path:
-        path = path.strip('" \t\n\r')
-    else:
-        path = '.'
+    url = f"https://icanhazdadjoke.com/search?limit={limit}"
+    if query:
+        url += f"&term={shlex.quote(query)}"
 
-    quoted_path = shlex.quote(path)
-    res = await run_command(f"ls -la {quoted_path}", safe=True)
-    return res["output"]
+    command = f'curl -H "Accept: text/plain" "{url}" | cowsay | lolcat'
+
+    result = await run_command(command, safe=False)
+    
+    return result["output"]
+
+
+@mcp.tool()
+async def display_parrot() -> str:
+    """
+    Display a parrot
+    """
+    
+    command = f'curl parrot.live'
+    
+    result = await run_command(command, safe=False)
+
+    return "Oh wait there's actually a parrot here"
+    
+    # return result["output"]
+
+
+@mcp.tool()
+async def ping_website(url: str) -> str:
+    """
+    Ping a website
+
+    Args:
+        url: URL of the website to ping. Only include the domain name, without the protocol.
+
+    Returns:
+        Result of the ping
+    """
+    
+    command = f'prettyping {url}'
+
+    result = await run_command(command, safe=False)
+    
+    return result["output"]
+
+
+# @mcp.tool()
+# async def get_command_history(count: int = 20, filter_str: Optional[str] = None) -> str:
+#     """
+#     Get recent command execution history
+    
+#     Args:
+#         count: Number of recent commands to return
+#         filter_str: Filter to apply to the command output
+#     Returns:
+#         Formatted command history record
+#     """
+    
+#     command = f"history {count}"
+    
+#     if filter_str:
+#         quoted_filter_str = shlex.quote(filter_str)
+#         command += f" | grep {quoted_filter_str}"
+
+#     res = await run_command(command, safe=True)
+#     return res["output"]
+
+# @mcp.tool()
+# async def get_current_directory() -> str:
+#     """
+#     Get current working directory
+    
+#     Returns:
+#         Path of current working directory
+#     """
+
+#     res = await run_command("pwd", safe=True)
+#     return res["output"]
+
+# @mcp.tool()
+# async def change_directory(path: str) -> str:
+#     """
+#     Change current working directory
+    
+#     Args:
+#         path: Directory path to switch to
+    
+#     Returns:
+#         Operation result information
+#     """
+
+#     path = shlex.quote(path)
+#     res = await run_command(f"cd {path}", safe=True)
+#     return res["output"]
+
+# @mcp.tool()
+# async def list_directory(path: Optional[str] = None) -> str:
+#     """
+#     List files and subdirectories in the specified directory
+    
+#     Args:
+#         path: Directory path to list contents, default is current directory
+    
+#     Returns:
+#         List of directory contents
+#     """
+
+#     if path:
+#         path = path.strip('" \t\n\r')
+#     else:
+#         path = '.'
+
+#     quoted_path = shlex.quote(path)
+#     res = await run_command(f"ls -la {quoted_path}", safe=True)
+#     return res["output"]
 
 @mcp.tool()
 async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
@@ -433,6 +550,7 @@ async def news_search(query: str) -> str:
     command = f"curl -X POST \\$ETERNALAI_MCP_PROXY_URL -H 'Content-Type: application/json' -d {data_str}"
     res = await run_command(command, safe=True, fast=True)
     return res["output"]
+
 
 # @mcp.tool()
 # async def read_file(path: str, start_row: int = None, end_row: int = None, as_json: bool = False) -> str:
