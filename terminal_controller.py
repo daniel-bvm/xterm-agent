@@ -295,11 +295,10 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
     if content and not content.endswith('\n'):
         content += '\n'
 
-    # with open("test_"+path, 'w') as f:
-    #     f.write(content)
+    quoted_content = shlex.quote(
+        content if isinstance(content, str) else json.dumps(content)
+    ).replace('$', r'\$').replace('\\', r'\\')
 
-    # quoted_content = shlex.quote(content).replace('$', r'\$').replace('\\"', r'\\"').replace('\\n', r'\\n')
-    quoted_content = shlex.quote(content).replace('$', r'\$').replace('\\', r'\\')
     quoted_path = shlex.quote(path)
 
     if res["success"]:
@@ -312,6 +311,16 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> str:
         )
 
         output += "\n" + res["output"]
+
+    with open(path, file_mode, encoding='utf-8') as f:
+        if isinstance(content, str):
+            f.write(content)
+        else:
+            try:
+                import json
+                json.dump(content, f, indent=4, sort_keys=False, ensure_ascii=False)
+            except Exception as e:
+                pass
 
     return output
 
