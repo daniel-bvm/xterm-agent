@@ -354,7 +354,18 @@ async def internet_search(query: str) -> str:
         ]
     }
 
-    data_str = shlex.quote(json.dumps(data, indent=2)).replace('$', "'$'").replace('\\"', r'\\"')
+    # proxy_url = os.environ.get('ETERNALAI_MCP_PROXY_URL', 'undefined')
+
+    # session = requests.Session()
+    # request = requests.Request('POST', proxy_url, json=data, headers={'Content-Type': 'application/json'})
+    # prepared = session.prepare_request(request)
+    # command = curlify.to_curl(prepared)
+
+    # with open("test_internet_search.json", "w") as f:
+    #     f.write(data_str)
+
+    data_str = json.dumps(data, indent=2)
+    data_str = shlex.quote(data_str).replace('\\', r'\\')
     command = f"curl -X POST \$ETERNALAI_MCP_PROXY_URL -H 'Content-Type: application/json' -d {data_str}"
     res = await run_command(command, safe=True, fast=True)
     return res["output"]
@@ -399,11 +410,96 @@ async def news_search(query: str) -> str:
         ]
     }
 
-    data_str = shlex.quote(json.dumps(data, indent=2)).replace('$', "'$'").replace('\\"', r'\\"')
+
+    # proxy_url = os.environ.get('ETERNALAI_MCP_PROXY_URL', 'undefined')
+
+    # session = requests.Session()
+    # request = requests.Request('POST', proxy_url, json=data, headers={'Content-Type': 'application/json'})
+    # prepared = session.prepare_request(request)
+    # command = curlify.to_curl(prepared)
+
+    data_str = json.dumps(data, indent=2)
+    data_str = shlex.quote(data_str).replace('\\', r'\\')
     command = f"curl -X POST \$ETERNALAI_MCP_PROXY_URL -H 'Content-Type: application/json' -d {data_str}"
     res = await run_command(command, safe=True, fast=True)
     return res["output"]
 
+# @mcp.tool()
+# async def read_file(path: str, start_row: int = None, end_row: int = None, as_json: bool = False) -> str:
+#     """
+#     Read content from a file with optional row selection
+    
+#     Args:
+#         path: Path to the file
+#         start_row: Starting row to read from (0-based, optional)
+#         end_row: Ending row to read to (0-based, inclusive, optional)
+#         as_json: If True, attempt to parse file content as JSON (optional)
+    
+#     Returns:
+#         File content or selected lines, optionally parsed as JSON
+#     """
+#     try:
+#         if not os.path.exists(path):
+#             return f"Error: File '{path}' does not exist."
+            
+#         if not os.path.isfile(path):
+#             return f"Error: '{path}' is not a file."
+        
+#         # Check file size before reading to prevent memory issues
+#         file_size = os.path.getsize(path)
+#         if file_size > 10 * 1024 * 1024:  # 10 MB limit
+#             return f"Warning: File is very large ({file_size/1024/1024:.2f} MB). Consider using row selection."
+            
+#         with open(path, 'r', encoding='utf-8', errors='replace') as file:
+#             lines = file.readlines()
+            
+#         # If row selection is specified
+#         if start_row is not None:
+#             if start_row < 0:
+#                 return "Error: start_row must be non-negative."
+                
+#             # If only start_row is specified, read just that single row
+#             if end_row is None:
+#                 if start_row >= len(lines):
+#                     return f"Error: start_row {start_row} is out of range (file has {len(lines)} lines)."
+#                 content = f"Line {start_row}: {lines[start_row]}"
+#             else:
+#                 # Both start_row and end_row are specified
+#                 if end_row < start_row:
+#                     return "Error: end_row must be greater than or equal to start_row."
+                    
+#                 if end_row >= len(lines):
+#                     end_row = len(lines) - 1
+                    
+#                 selected_lines = lines[start_row:end_row+1]
+#                 content = ""
+#                 for i, line in enumerate(selected_lines):
+#                     content += f"Line {start_row + i}: {line}" if not line.endswith('\n') else f"Line {start_row + i}: {line}"
+#         else:
+#             # If no row selection, return the entire file
+#             content = "".join(lines)
+        
+#         # If as_json is True, try to parse the content as JSON
+#         if as_json:
+#             try:
+#                 import json
+#                 # If we're showing line numbers, we cannot parse as JSON
+#                 if start_row is not None:
+#                     return "Error: Cannot parse as JSON when displaying line numbers. Use as_json without row selection."
+                
+#                 # Try to parse the content as JSON
+#                 parsed_json = json.loads(content)
+#                 # Return pretty-printed JSON for better readability
+#                 return json.dumps(parsed_json, indent=4, sort_keys=False, ensure_ascii=False)
+#             except json.JSONDecodeError as e:
+#                 return f"Error: File content is not valid JSON. {str(e)}\n\nRaw content:\n{content}"
+        
+#         return content
+            
+#     except PermissionError:
+#         return f"Error: No permission to read file '{path}'."
+#     except Exception as e:
+#         return f"Error reading file: {str(e)}"
 
 # @mcp.tool()
 # async def insert_file_content(path: str, content: str, row: int = None, rows: list = None) -> str:
@@ -795,7 +891,6 @@ async def news_search(query: str) -> str:
 #         return f"Error: No permission to modify file '{path}'."
 #     except Exception as e:
 #         return f"Error updating content: {str(e)}"
-
 
 
 async def fetch(url: str, filter_str: Optional[str] = None) -> str:
