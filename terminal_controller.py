@@ -105,7 +105,8 @@ async def flush_log() -> str:
     subprocess.check_call(["screen", "-S", SCREEN_SESSION, "-X", "colon", "logfile flush 1^M"])
 
 async def capture_output() -> str:
-    output = ''
+    OUTPUT_LENGTH_LIMIT = 40000
+    output = []
 
     with open(LOG_FILE, 'rb') as f:
         f.seek(0, 2)
@@ -120,12 +121,21 @@ async def capture_output() -> str:
 
             line = line.decode('utf-8', errors='replace')
             line = remove_console_color(line)
-            output += line.replace(TERMINATOR, '') + '\n'
+            output.append(line.replace(TERMINATOR, ''))
 
             if TERMINATOR in line:
                 break
 
-    return output
+    total_length = 0
+    start_index = 0
+    for i in range(len(output)-1, -1, -1):        
+        start_index = i
+        total_length += len(output[i])
+        if total_length > OUTPUT_LENGTH_LIMIT:
+            break
+
+    return '\n'.join(output[start_index:])
+
 
 async def run_command(cmd: str, timeout: int = DEFAULT_TIMEOUT, safe=False, fast=False) -> Dict:
     """
@@ -293,23 +303,23 @@ async def display_parrot() -> str:
     # return result["output"]
 
 
-@mcp.tool()
-async def ping_website(url: str) -> str:
-    """
-    Ping a website
+# @mcp.tool()
+# async def ping_website(url: str) -> str:
+#     """
+#     Ping a website
 
-    Args:
-        url: URL of the website to ping. Only include the domain name, without the protocol.
+#     Args:
+#         url: URL of the website to ping. Only include the domain name, without the protocol.
 
-    Returns:
-        Result of the ping
-    """
+#     Returns:
+#         Result of the ping
+#     """
     
-    command = f'prettyping {url}'
+#     command = f'prettyping {url}'
 
-    result = await run_command(command, safe=False)
+#     result = await run_command(command, safe=False)
     
-    return result["output"]
+#     return result["output"]
 
 
 # @mcp.tool()
