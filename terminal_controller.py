@@ -206,101 +206,101 @@ async def execute_command(command: str, filter_str: Optional[str] = None) -> str
     return output
 
 
-@mcp.tool()
-async def get_weather(location_code: str) -> str:
-    """
-    Get weather information for a given location
+# @mcp.tool()
+# async def get_weather(location_code: str) -> str:
+#     """
+#     Get weather information for a given location
 
-    Args:
-        location_code: 3-letter airport code of the location to get weather for
+#     Args:
+#         location_code: 3-letter airport code of the location to get weather for
     
-    Returns:
-        Weather information for the given location
-    """
+#     Returns:
+#         Weather information for the given location
+#     """
 
-    location_code = shlex.quote(location_code)
+#     location_code = shlex.quote(location_code)
 
-    command = f"curl wttr.in/{location_code}"
+#     command = f"curl wttr.in/{location_code}"
 
-    result = await run_command(command, safe=False)
+#     result = await run_command(command, safe=False)
     
-    return result["output"]
+#     return result["output"]
 
 
-@mcp.tool()
-async def get_crypto_market_info() -> str:
-    """
-    Get information for the overall crypto market
+# @mcp.tool()
+# async def get_crypto_market_info() -> str:
+#     """
+#     Get information for the overall crypto market
 
-    Returns:
-        Information for the overall crypto market
-    """
+#     Returns:
+#         Information for the overall crypto market
+#     """
 
-    command = f"curl rate.sx"
+#     command = f"curl rate.sx"
 
-    result = await run_command(command, safe=False)
+#     result = await run_command(command, safe=False)
     
-    return result["output"]
+#     return result["output"]
 
 
-@mcp.tool()
-async def get_cryptocoin_info(symbol: str) -> str:
-    """
-    Get information for a given crypto coin
+# @mcp.tool()
+# async def get_cryptocoin_info(symbol: str) -> str:
+#     """
+#     Get information for a given crypto coin
 
-    Args:
-        symbol: Symbol of the crypto coin to get information for
+#     Args:
+#         symbol: Symbol of the crypto coin to get information for
     
-    Returns:
-        Information for the given crypto coin
-    """
+#     Returns:
+#         Information for the given crypto coin
+#     """
 
-    symbol = shlex.quote(symbol.lower())
+#     symbol = shlex.quote(symbol.lower())
 
-    command = f"curl rate.sx/{symbol}"
+#     command = f"curl rate.sx/{symbol}"
 
-    result = await run_command(command, safe=False)
+#     result = await run_command(command, safe=False)
     
-    return result["output"]
+#     return result["output"]
 
 
-@mcp.tool()
-async def get_joke(query: Optional[str] = None, limit: Optional[int] = 1) -> str:
-    """
-    Get a random joke
+# @mcp.tool()
+# async def get_joke(query: Optional[str] = None, limit: Optional[int] = 1) -> str:
+#     """
+#     Get a random joke
 
-    Args:
-        query: Query to search for
-        limit: Number of jokes to return
+#     Args:
+#         query: Query to search for
+#         limit: Number of jokes to return
 
-    Returns:
-        A random joke
-    """
+#     Returns:
+#         A random joke
+#     """
 
-    url = f"https://icanhazdadjoke.com/search?limit={limit}"
-    if query:
-        url += f"&term={shlex.quote(query)}"
+#     url = f"https://icanhazdadjoke.com/search?limit={limit}"
+#     if query:
+#         url += f"&term={shlex.quote(query)}"
 
-    command = f'curl -H "Accept: text/plain" "{url}" | cowsay | lolcat'
+#     command = f'curl -H "Accept: text/plain" "{url}" | cowsay | lolcat'
 
-    result = await run_command(command, safe=False)
+#     result = await run_command(command, safe=False)
     
-    return result["output"]
+#     return result["output"]
 
 
-@mcp.tool()
-async def display_parrot() -> str:
-    """
-    Display a parrot
-    """
+# @mcp.tool()
+# async def display_parrot() -> str:
+#     """
+#     Display a parrot
+#     """
     
-    command = f'curl parrot.live'
+#     command = f'curl parrot.live'
     
-    result = await run_command(command, safe=False)
+#     result = await run_command(command, safe=False)
 
-    return "Oh wait there's actually a parrot here"
+#     return "Oh wait there's actually a parrot here"
     
-    # return result["output"]
+#     # return result["output"]
 
 
 # @mcp.tool()
