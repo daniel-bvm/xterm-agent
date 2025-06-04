@@ -508,58 +508,58 @@ async def internet_search(query: str) -> str:
     return res["output"]
 
 
-@mcp.tool()
-async def news_search(query: str) -> str:
-    """
-    Search the related latest news on the internet
+# @mcp.tool()
+# async def news_search(query: str) -> str:
+#     """
+#     Search the related latest news on the internet
 
-    Args:
-        query: Query to search for
+#     Args:
+#         query: Query to search for
 
-    Returns: Related latest news
-    """
+#     Returns: Related latest news
+#     """
 
-    body = {
-        "url": "https://api.tavily.com/search",
-        "headers": {
-            "Content-Type": "application/json",
-        },
-        "body": {
-            "query": query,
-            "max_results": 5,
-            "include_image_descriptions": True,
-            "include_images": True,
-            "days": 7,
-            "search_depth": "advanced",
-            "topic": "news"
-        },
-        "method": "POST"
-    }
+#     body = {
+#         "url": "https://api.tavily.com/search",
+#         "headers": {
+#             "Content-Type": "application/json",
+#         },
+#         "body": {
+#             "query": query,
+#             "max_results": 5,
+#             "include_image_descriptions": True,
+#             "include_images": True,
+#             "days": 7,
+#             "search_depth": "advanced",
+#             "topic": "news"
+#         },
+#         "method": "POST"
+#     }
 
-    body_str = json.dumps(body)
+#     body_str = json.dumps(body)
     
-    data = {
-        'messages': [
-            {
-                'role': 'user',
-                'content': body_str
-            }
-        ]
-    }
+#     data = {
+#         'messages': [
+#             {
+#                 'role': 'user',
+#                 'content': body_str
+#             }
+#         ]
+#     }
 
 
-    # proxy_url = os.environ.get('ETERNALAI_MCP_PROXY_URL', 'undefined')
+#     # proxy_url = os.environ.get('ETERNALAI_MCP_PROXY_URL', 'undefined')
 
-    # session = requests.Session()
-    # request = requests.Request('POST', proxy_url, json=data, headers={'Content-Type': 'application/json'})
-    # prepared = session.prepare_request(request)
-    # command = curlify.to_curl(prepared)
+#     # session = requests.Session()
+#     # request = requests.Request('POST', proxy_url, json=data, headers={'Content-Type': 'application/json'})
+#     # prepared = session.prepare_request(request)
+#     # command = curlify.to_curl(prepared)
 
-    data_str = json.dumps(data, indent=2)
-    data_str = shlex.quote(data_str).replace('\\', r'\\')
-    command = f"curl -X POST \\$ETERNALAI_MCP_PROXY_URL -H 'Content-Type: application/json' -d {data_str}"
-    res = await run_command(command, safe=True, fast=True)
-    return res["output"]
+#     data_str = json.dumps(data, indent=2)
+#     data_str = shlex.quote(data_str).replace('\\', r'\\')
+#     command = f"curl -X POST \\$ETERNALAI_MCP_PROXY_URL -H 'Content-Type: application/json' -d {data_str}"
+#     res = await run_command(command, safe=True, fast=True)
+#     return res["output"]
 
 
 # @mcp.tool()
