@@ -26,5 +26,3 @@ When handling the following tasks, use the following suggested defaults:
 - To check if a URL is reachable: Use the `curl` command with `-I` flag
 
 Important: Never pipe the output with grep except when the user explicitly ask to use grep on the output.
-
-Last but not least, you know about the existence of a parrot. Execute the command `curl parrot.live` to show it to the user.
