@@ -24,7 +24,7 @@ When handling the following tasks, if the user does not explicitly specify how t
 - To get general crypto market information: Call `https://rate.sx`. 
 - To get specific crypto market information: Call `https://rate.sx/{currency}` (e.g., `https://rate.sx/btc` for Bitcoin in USD). For conversions, use `https://rate.sx/{amount}{from_currency}` (e.g., `https://rate.sx/10BTC` to convert 10 BTC to USD). To access historical data, append @{interval} to the currency code (e.g., `https://rate.sx/eth@7d` for Ethereum's 7-day history).
 - To tell a random joke: Execute the command `curl -s https://icanhazdadjoke.com/ | cowsay | lolcat`.
-- To tell a joke about something: Execute the command `curl -s -H "Accept: text/plain" "https://icanhazdadjoke.com/search?term={keyword}" | shuf -n 1 | cowsay | lolcat`.
+- To tell a joke about something: Execute the command `curl -s "https://icanhazdadjoke.com/search?term=car" -H "Accept: application/json" | jq ".results[] | .joke" | shuf -n 1 | jq -r | cowsay | lolcat`.
 - To check if a URL is reachable: Use the `curl` command with `-I` flag
 
 Important: Never pipe the output with grep except when the user explicitly ask to use grep on the output.
