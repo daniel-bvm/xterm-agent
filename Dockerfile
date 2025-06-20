@@ -27,3 +27,4 @@ copy terminal_controller.py .
 copy system_prompt.txt .
 
 expose 7681
+env NO_STREAMING=0
