@@ -16,6 +16,7 @@ run git clone https://github.com/tsl0922/ttyd.git \
     && make install
 
 env HTTP_DISPLAY_URL="http://localhost:7681"
+ENV PIP_ROOT_USER_ACTION=ignore
 
 copy requirements.txt .
 run pip install -r requirements.txt
